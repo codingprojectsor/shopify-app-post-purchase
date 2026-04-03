@@ -1,0 +1,79 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+model UpsellOffer {
+  id               String   @id @default(cuid())
+  shop             String
+  title            String
+  description      String
+  ctaText          String   @default("Add to Order")
+  productId        String
+  variantId        String
+  productTitle     String
+  productImage     String?
+  productPrice     String
+  discountType     String   // "percentage" | "fixed"
+  discountValue    Float
+  timeLimitMinutes Int?
+  enabled          Boolean  @default(true)
+  testMode         Boolean  @default(false)
+  priority         Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  targetingRules  TargetingRule[]
+  analyticsEvents AnalyticsEvent[]
+}
+
+model TargetingRule {
+  id        String      @id @default(cuid())
+  offerId   String
+  offer     UpsellOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  ruleType  String      // "product" | "cart_value"
+  operator  String      // "contains" | "greater_than" | "less_than" | "equals"
+  value     String
+  createdAt DateTime    @default(now())
+}
+
+model AnalyticsEvent {
+  id        String      @id @default(cuid())
+  shop      String
+  offerId   String
+  offer     UpsellOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  eventType String      // "view" | "accept" | "decline"
+  orderId   String?
+  revenue   Float?
+  createdAt DateTime    @default(now())
+}

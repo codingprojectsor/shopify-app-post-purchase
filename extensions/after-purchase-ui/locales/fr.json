@@ -1,0 +1,13 @@
+{
+  "loading": "Chargement de votre offre spéciale...",
+  "addToOrder": "Ajouter à la commande",
+  "noThanks": "Non merci",
+  "off": "de réduction",
+  "expiresIn": "L'offre expire dans {{time}}",
+  "offerExpiredTitle": "Offre expirée",
+  "offerExpired": "Cette offre spéciale a expiré.",
+  "acceptedTitle": "Ajouté à votre commande !",
+  "acceptedMessage": "{{product}} a été ajouté à votre commande. Merci !",
+  "errorTitle": "Une erreur est survenue",
+  "errorMessage": "Nous n'avons pas pu traiter votre demande. Veuillez réessayer."
+}
