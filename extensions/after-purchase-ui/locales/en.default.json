@@ -1,0 +1,13 @@
+{
+  "loading": "Loading your special offer...",
+  "addToOrder": "Add to Order",
+  "noThanks": "No Thanks",
+  "off": "off",
+  "expiresIn": "Offer expires in {{time}}",
+  "offerExpiredTitle": "Offer Expired",
+  "offerExpired": "This special offer has expired.",
+  "acceptedTitle": "Added to Your Order!",
+  "acceptedMessage": "{{product}} has been added to your order. Thank you!",
+  "errorTitle": "Something went wrong",
+  "errorMessage": "We couldn't process your request. Please try again."
+}

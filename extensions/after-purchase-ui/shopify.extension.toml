@@ -1,0 +1,46 @@
+# Learn more about configuring your checkout UI extension:
+# https://shopify.dev/docs/api/checkout-ui-extensions/latest/configuration
+
+# The version of APIs your extension will receive. Learn more:
+# https://shopify.dev/docs/api/usage/versioning
+api_version = "2026-01"
+
+[[extensions]]
+name = "after-purchase-ui"
+handle = "after-purchase-ui"
+type = "ui_extension"
+uid = "0dec559d-6edf-c30b-eee2-7a26a7807518d04315cf"
+
+# Controls where in Shopify your extension will be injected,
+# and the file that contains your extension's source code. Learn more:
+# https://shopify.dev/docs/api/checkout-ui-extensions/latest/extension-targets-overview
+
+[[extensions.targeting]]
+module = "./src/ThankYou.jsx"
+target = "purchase.thank-you.block.render"
+
+[extensions.capabilities]
+# Gives your extension access to directly query Shopify's storefront API.
+# https://shopify.dev/docs/api/checkout-ui-extensions/latest/configuration#api-access
+api_access = true
+
+# Gives your extension access to make external network calls, using the
+# JavaScript `fetch()` API. Learn more:
+# https://shopify.dev/docs/api/checkout-ui-extensions/latest/configuration#network-access
+network_access = true
+
+# Defines settings that will be collected from merchants installing
+# your extension. Learn more:
+# https://shopify.dev/docs/api/checkout-ui-extensions/latest/configuration#settings-definition
+
+# Load app metafield containing the backend URL
+[[extensions.metafields]]
+namespace = "$app"
+key = "app_url"
+
+[extensions.settings]
+[[extensions.settings.fields]]
+key = "app_url"
+type = "single_line_text_field"
+name = "App URL"
+description = "Your app backend URL (e.g. https://your-app.trycloudflare.com). Set this in the Checkout Editor."
