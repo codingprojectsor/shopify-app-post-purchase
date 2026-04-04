@@ -38,9 +38,7 @@ if (host === "localhost") {
 export default defineConfig({
   server: {
     allowedHosts: [host],
-    cors: {
-      preflightContinue: true,
-    },
+    cors: true,
     port: Number(process.env.PORT || 3000),
     hmr: hmrConfig,
     fs: {

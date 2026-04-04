@@ -39,8 +39,9 @@ namespace = "$app"
 key = "app_url"
 
 [extensions.settings]
+
 [[extensions.settings.fields]]
 key = "app_url"
 type = "single_line_text_field"
 name = "App URL"
-description = "Your app backend URL (e.g. https://your-app.trycloudflare.com). Set this in the Checkout Editor."
+description = "Your app backend URL. Auto-detected — only change if needed."
