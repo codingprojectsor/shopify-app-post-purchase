@@ -1,24 +1,43 @@
 import type { ActionFunctionArgs } from "react-router";
 import { verifyExtensionToken } from "../utils/verify-extension-token.server";
+import { handleCors, corsJson, corsError } from "../utils/cors.server";
 import { unauthenticated } from "../shopify.server";
 import db from "../db.server";
+
+export const loader = () => new Response(null, {
+  status: 204,
+  headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" },
+});
 
 interface AcceptRequest {
   offerId: string;
   orderId: string;
+  funnelStep?: number;
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   if (request.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+    return corsError("Method not allowed", 405);
   }
 
-  const { shop } = await verifyExtensionToken(request);
+  const preflight = handleCors(request);
+  if (preflight) return preflight;
+
+  let shop: string;
+  try {
+    const result = await verifyExtensionToken(request);
+    shop = result.shop;
+  } catch (err) {
+    const status = err instanceof Response ? err.status : 500;
+    const msg = err instanceof Response ? await err.text() : "Auth failed";
+    return corsError(msg, status);
+  }
+
   const body: AcceptRequest = await request.json();
-  const { offerId, orderId } = body;
+  const { offerId, orderId, funnelStep = 1 } = body;
 
   if (!offerId || !orderId) {
-    return Response.json(
+    return corsJson(
       { error: "Missing offerId or orderId" },
       { status: 400 },
     );
@@ -26,11 +45,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   // Look up the offer
   const offer = await db.upsellOffer.findFirst({
-    where: { id: offerId, shop, enabled: true },
+    where: { id: offerId, shop, status: "active" },
   });
 
   if (!offer) {
-    return Response.json({ error: "Offer not found" }, { status: 404 });
+    return corsJson({ error: "Offer not found" }, { status: 404 });
+  }
+
+  // Normalize order ID to gid://shopify/Order/xxx format
+  let orderGid = orderId;
+  if (orderGid.includes("OrderIdentity")) {
+    orderGid = orderGid.replace("OrderIdentity", "Order");
+  } else if (!orderGid.startsWith("gid://")) {
+    orderGid = `gid://shopify/Order/${orderGid}`;
   }
 
   // Get admin API client for this shop (offline token)
@@ -42,46 +69,39 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       `#graphql
       mutation orderEditBegin($id: ID!) {
         orderEditBegin(id: $id) {
-          calculatedOrder {
-            id
-          }
-          userErrors {
-            field
-            message
-          }
+          calculatedOrder { id }
+          userErrors { field message }
         }
       }`,
-      { variables: { id: orderId } },
+      { variables: { id: orderGid } },
     );
 
     const beginData = await beginResponse.json();
     const beginErrors = beginData.data?.orderEditBegin?.userErrors;
     if (beginErrors?.length) {
-      console.error("orderEditBegin errors:", beginErrors);
-      return Response.json(
+      return corsJson(
         { error: beginErrors[0].message },
         { status: 422 },
       );
     }
 
     const calculatedOrderId =
-      beginData.data.orderEditBegin.calculatedOrder.id;
+      beginData.data?.orderEditBegin?.calculatedOrder?.id;
+    if (!calculatedOrderId) {
+      return corsJson(
+        { error: "Failed to begin order edit" },
+        { status: 500 },
+      );
+    }
 
     // Step 2: Add the variant to the order
     const addVariantResponse = await admin.graphql(
       `#graphql
       mutation orderEditAddVariant($id: ID!, $variantId: ID!, $quantity: Int!) {
         orderEditAddVariant(id: $id, variantId: $variantId, quantity: $quantity) {
-          calculatedOrder {
-            id
-          }
-          calculatedLineItem {
-            id
-          }
-          userErrors {
-            field
-            message
-          }
+          calculatedOrder { id }
+          calculatedLineItem { id }
+          userErrors { field message }
         }
       }`,
       {
@@ -97,14 +117,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const addErrors = addData.data?.orderEditAddVariant?.userErrors;
     if (addErrors?.length) {
       console.error("orderEditAddVariant errors:", addErrors);
-      return Response.json({ error: addErrors[0].message }, { status: 422 });
+      return corsJson({ error: addErrors[0].message }, { status: 422 });
     }
 
     const calculatedLineItemId =
-      addData.data.orderEditAddVariant.calculatedLineItem.id;
+      addData.data?.orderEditAddVariant?.calculatedLineItem?.id;
+    if (!calculatedLineItemId) {
+      return corsJson(
+        { error: "Failed to add item to order" },
+        { status: 500 },
+      );
+    }
 
     // Step 3: Apply discount if configured
-    if (offer.discountValue > 0) {
+    if (offer.discountValue > 0 && calculatedLineItemId) {
       const discountInput =
         offer.discountType === "percentage"
           ? {
@@ -113,45 +139,43 @@ export const action = async ({ request }: ActionFunctionArgs) => {
             }
           : {
               fixedValue: offer.discountValue,
-              description: `${offer.discountValue} upsell discount`,
+              description: `$${offer.discountValue} upsell discount`,
             };
 
-      const discountResponse = await admin.graphql(
-        `#graphql
-        mutation orderEditAddLineItemDiscount(
-          $id: ID!
-          $lineItemId: ID!
-          $discount: OrderEditAppliedDiscountInput!
-        ) {
-          orderEditAddLineItemDiscount(
-            id: $id
-            lineItemId: $lineItemId
-            discount: $discount
+      try {
+        const discountResponse = await admin.graphql(
+          `#graphql
+          mutation orderEditAddLineItemDiscount(
+            $id: ID!
+            $lineItemId: ID!
+            $discount: OrderEditAppliedDiscountInput!
           ) {
-            calculatedOrder {
-              id
+            orderEditAddLineItemDiscount(
+              id: $id
+              lineItemId: $lineItemId
+              discount: $discount
+            ) {
+              calculatedOrder { id }
+              userErrors { field message }
             }
-            userErrors {
-              field
-              message
-            }
-          }
-        }`,
-        {
-          variables: {
-            id: calculatedOrderId,
-            lineItemId: calculatedLineItemId,
-            discount: discountInput,
+          }`,
+          {
+            variables: {
+              id: calculatedOrderId,
+              lineItemId: calculatedLineItemId,
+              discount: discountInput,
+            },
           },
-        },
-      );
+        );
 
-      const discountData = await discountResponse.json();
-      const discountErrors =
-        discountData.data?.orderEditAddLineItemDiscount?.userErrors;
-      if (discountErrors?.length) {
-        console.error("orderEditAddLineItemDiscount errors:", discountErrors);
-        // Continue anyway — the item is added, just without discount
+        const discountData = await discountResponse.json();
+        const discountErrors =
+          discountData.data?.orderEditAddLineItemDiscount?.userErrors;
+        if (discountErrors?.length) {
+          console.error("Discount errors (item still added):", discountErrors);
+        }
+      } catch (discountErr) {
+        console.error("Discount application failed (item still added):", discountErr);
       }
     }
 
@@ -160,13 +184,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       `#graphql
       mutation orderEditCommit($id: ID!) {
         orderEditCommit(id: $id) {
-          order {
-            id
-          }
-          userErrors {
-            field
-            message
-          }
+          order { id }
+          userErrors { field message }
         }
       }`,
       { variables: { id: calculatedOrderId } },
@@ -176,7 +195,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const commitErrors = commitData.data?.orderEditCommit?.userErrors;
     if (commitErrors?.length) {
       console.error("orderEditCommit errors:", commitErrors);
-      return Response.json(
+      return corsJson(
         { error: commitErrors[0].message },
         { status: 422 },
       );
@@ -189,7 +208,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ? originalPrice * (1 - offer.discountValue / 100)
         : originalPrice - offer.discountValue;
 
-    // Record analytics event
+    // Record analytics event with funnel step and A/B test tracking
     await db.analyticsEvent.create({
       data: {
         shop,
@@ -197,14 +216,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         eventType: "accept",
         orderId,
         revenue: Math.max(0, revenue),
+        funnelStep,
+        abTestId: offer.abTestId,
       },
     });
 
-    return Response.json({ success: true });
+    return corsJson({ success: true });
   } catch (err) {
-    console.error("Order edit failed:", err);
-    return Response.json(
-      { error: "Failed to modify order. Please try again." },
+    console.error("Order edit failed:", err instanceof Error ? err.message : err);
+    const errMsg = err instanceof Error ? err.message : String(err);
+    return corsJson(
+      { error: `Order edit failed: ${errMsg}` },
       { status: 500 },
     );
   }

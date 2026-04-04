@@ -5,9 +5,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
-// enough when changing adapters.
-// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
   provider = "sqlite"
   url      = "file:dev.sqlite"
@@ -47,33 +44,121 @@ model UpsellOffer {
   discountType     String   // "percentage" | "fixed"
   discountValue    Float
   timeLimitMinutes Int?
-  enabled          Boolean  @default(true)
+  status           String   @default("active") // "draft" | "active" | "paused"
   testMode         Boolean  @default(false)
   priority         Int      @default(0)
+  // Scheduling
+  scheduledStart   DateTime?
+  scheduledEnd     DateTime?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  fallbackOfferId String?
+
+  abTestId String?
+  abTest   ABTest? @relation(fields: [abTestId], references: [id], onDelete: SetNull)
+
   targetingRules  TargetingRule[]
   analyticsEvents AnalyticsEvent[]
+
+  @@index([shop])
+  @@index([shop, status])
 }
 
 model TargetingRule {
   id        String      @id @default(cuid())
   offerId   String
   offer     UpsellOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  ruleType  String      // "product" | "cart_value"
-  operator  String      // "contains" | "greater_than" | "less_than" | "equals"
+  ruleType  String      // "product" | "collection" | "cart_value" | "quantity" | "order_count" | "customer_tag" | "shipping_country"
+  operator  String      // "contains" | "greater_than" | "less_than" | "equals" | "not_equals"
   value     String
   createdAt DateTime    @default(now())
 }
 
 model AnalyticsEvent {
-  id        String      @id @default(cuid())
-  shop      String
-  offerId   String
-  offer     UpsellOffer @relation(fields: [offerId], references: [id], onDelete: Cascade)
-  eventType String      // "view" | "accept" | "decline"
-  orderId   String?
-  revenue   Float?
-  createdAt DateTime    @default(now())
+  id         String       @id @default(cuid())
+  shop       String
+  offerId    String?
+  offer      UpsellOffer? @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  eventType  String       // "view" | "accept" | "decline" | "survey_response" | "social_share"
+  orderId    String?
+  revenue    Float?
+  funnelStep Int         @default(1)
+  abTestId   String?
+  metadata   String?     // JSON string for extra data (survey answers, share platform, etc.)
+  createdAt  DateTime    @default(now())
+
+  @@index([shop])
+  @@index([offerId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+// A/B Testing
+model ABTest {
+  id           String    @id @default(cuid())
+  shop         String
+  name         String
+  description  String    @default("")
+  status       String    @default("draft") // "draft" | "running" | "completed"
+  splitPercent Int       @default(50)
+  winnerId     String?
+  startedAt    DateTime?
+  endedAt      DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  offers UpsellOffer[]
+}
+
+// Thank-you page widget configuration per shop
+model WidgetConfig {
+  id         String  @id @default(cuid())
+  shop       String
+  widgetType String  // "upsell" | "social_share" | "survey" | "reorder" | "custom_message"
+  enabled    Boolean @default(true)
+  position   Int     @default(0) // lower = shown first
+  settings   String  @default("{}") // JSON — widget-specific settings
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shop, widgetType])
+}
+
+// Survey questions configured by merchant
+model SurveyQuestion {
+  id           String @id @default(cuid())
+  shop         String
+  question     String
+  questionType String @default("rating") // "rating" | "text" | "multiple_choice"
+  options      String @default("[]") // JSON array for multiple_choice options
+  position     Int    @default(0)
+  enabled      Boolean @default(true)
+  createdAt    DateTime @default(now())
+
+  responses SurveyResponse[]
+}
+
+model SurveyResponse {
+  id         String         @id @default(cuid())
+  shop       String
+  questionId String
+  question   SurveyQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  orderId    String?
+  answer     String
+  createdAt  DateTime       @default(now())
+}
+
+// Branding settings per shop
+model BrandingConfig {
+  id              String @id @default(cuid())
+  shop            String @unique
+  primaryColor    String @default("#000000")
+  accentColor     String @default("#22c55e")
+  buttonStyle     String @default("rounded") // "rounded" | "square" | "pill"
+  showTrustBadges Boolean @default(true)
+  customMessage   String @default("") // custom thank-you message
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
