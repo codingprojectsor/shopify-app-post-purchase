@@ -1,0 +1,80 @@
+/* ============================================
+   Post-Purchase Upsell App — Global Styles
+   Works alongside Polaris web components.
+   Only targets layout/overflow — Polaris handles
+   internal component styles via Shadow DOM.
+   ============================================ */
+
+/* Tables: horizontal scroll on small screens */
+s-table {
+  display: block;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+/* Prevent table cells from wrapping awkwardly */
+s-table-cell {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* First column (offer name) can wrap */
+s-table-row > s-table-cell:first-child {
+  white-space: normal;
+  min-width: 120px;
+}
+
+/* Page content doesn't overflow */
+s-page {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Sections don't overflow */
+s-section {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+/* Grid items fill height for consistent cards */
+s-grid-item > s-box {
+  height: 100%;
+}
+
+/* Smooth hover on interactive cards */
+s-box[borderWidth="base"]:hover {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Better button group wrapping */
+s-stack[direction="inline"] {
+  flex-wrap: wrap;
+}
+
+/* Mobile: compact spacing */
+@media (max-width: 500px) {
+  /* Reduce section padding */
+  s-section[padding="base"] {
+    --padding: 8px;
+  }
+
+  /* Stack inline buttons vertically */
+  s-stack[direction="inline"] > s-button {
+    flex: 1 1 100%;
+  }
+
+  /* Smaller font for stats */
+  s-text[fontVariantNumeric="tabular-nums"] {
+    font-size: 14px;
+  }
+}
+
+/* Print styles — hide nav, buttons */
+@media print {
+  s-app-nav,
+  s-button,
+  s-switch {
+    display: none !important;
+  }
+}
