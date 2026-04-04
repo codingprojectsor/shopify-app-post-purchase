@@ -25,7 +25,7 @@
 - [x] Smart product recommendations (fallback to popular offers)
 
 ## Phase 4: Infrastructure
-- [x] Super admin dashboard (/admin)
+- [x] Super admin dashboard (/admin test)
 - [x] Pagination on all lists (URL-based)
 - [x] Delete confirmation modals everywhere
 - [x] Discount validation, circular fallback prevention
