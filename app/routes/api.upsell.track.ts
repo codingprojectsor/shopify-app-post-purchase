@@ -1,41 +1,54 @@
 import type { ActionFunctionArgs } from "react-router";
 import { verifyExtensionToken } from "../utils/verify-extension-token.server";
+import { handleCors, corsJson, corsError } from "../utils/cors.server";
 import db from "../db.server";
+
+export const loader = () => new Response(null, {
+  status: 204,
+  headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET, POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" },
+});
 
 interface TrackRequest {
   offerId: string;
   eventType: "view" | "decline";
+  funnelStep?: number;
 }
 
 export const action = async ({ request }: ActionFunctionArgs) => {
+  const preflight = handleCors(request);
+  if (preflight) return preflight;
+
   if (request.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+    return corsError("Method not allowed", 405);
   }
 
-  const { shop } = await verifyExtensionToken(request);
+  let shop: string;
+  try {
+    const result = await verifyExtensionToken(request);
+    shop = result.shop;
+  } catch (err) {
+    const status = err instanceof Response ? err.status : 500;
+    const msg = err instanceof Response ? await err.text() : "Auth failed";
+    return corsError(msg, status);
+  }
+
   const body: TrackRequest = await request.json();
-  const { offerId, eventType } = body;
+  const { offerId, eventType, funnelStep = 1 } = body;
 
   if (!offerId || !eventType) {
-    return Response.json(
-      { error: "Missing offerId or eventType" },
-      { status: 400 },
-    );
+    return corsError("Missing offerId or eventType", 400);
   }
 
-  // Only allow view and decline events through this endpoint
-  // (accept events are recorded in the accept endpoint)
   if (eventType !== "view" && eventType !== "decline") {
-    return Response.json({ error: "Invalid eventType" }, { status: 400 });
+    return corsError("Invalid eventType", 400);
   }
 
-  // Verify the offer exists
   const offer = await db.upsellOffer.findFirst({
     where: { id: offerId, shop },
   });
 
   if (!offer) {
-    return Response.json({ error: "Offer not found" }, { status: 404 });
+    return corsError("Offer not found", 404);
   }
 
   await db.analyticsEvent.create({
@@ -43,8 +56,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       shop,
       offerId,
       eventType,
+      funnelStep,
+      abTestId: offer.abTestId,
     },
   });
 
-  return Response.json({ success: true });
+  return corsJson({ success: true });
 };

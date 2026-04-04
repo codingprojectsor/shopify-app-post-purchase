@@ -12,6 +12,13 @@ node_modules
 /prisma/dev.sqlite
 /prisma/dev.sqlite-journal
 database.sqlite
+*.node_modules
+*.dist
+.gemini
+.cursor
+.claude
+
+package-lock.json
 
 .env
 .env.*
