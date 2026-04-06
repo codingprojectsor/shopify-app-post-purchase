@@ -45,3 +45,27 @@ key = "app_url"
 type = "single_line_text_field"
 name = "App URL"
 description = "Your app backend URL. Auto-detected — only change if needed."
+
+[[extensions.settings.fields]]
+key = "button_layout"
+type = "single_line_text_field"
+name = "Button Layout"
+description = "side-by-side or stacked (default: side-by-side)"
+
+[[extensions.settings.fields]]
+key = "decline_text"
+type = "single_line_text_field"
+name = "Decline Button Text"
+description = "Custom text for the decline button (default: No Thanks)"
+
+[[extensions.settings.fields]]
+key = "hide_decline"
+type = "boolean"
+name = "Hide Decline Button"
+description = "Hide the 'No Thanks' button completely"
+
+[[extensions.settings.fields]]
+key = "accept_tone"
+type = "single_line_text_field"
+name = "Accept Button Tone"
+description = "auto (store default) or critical (red urgency)"
