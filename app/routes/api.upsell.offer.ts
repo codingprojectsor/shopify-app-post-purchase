@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { verifyExtensionToken } from "../utils/verify-extension-token.server";
 import { handleCors, corsJson, corsError } from "../utils/cors.server";
+import { checkRateLimit } from "../utils/rate-limit.server";
 import db from "../db.server";
 
 export const loader = () => new Response(null, {
@@ -47,7 +48,29 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return corsError(msg, status);
   }
 
-  const body: OfferRequest = await request.json();
+  // Rate limit: 30 requests per minute per shop
+  if (!checkRateLimit(`offer:${shop}`, 30)) {
+    return corsError("Too many requests", 429);
+  }
+
+  let body: OfferRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return corsError("Invalid JSON body", 400);
+  }
+
+  // Input validation
+  if (!body.orderId || typeof body.orderId !== "string") {
+    return corsError("Missing or invalid orderId", 400);
+  }
+  if (!Array.isArray(body.lineItems)) {
+    body.lineItems = [];
+  }
+  if (typeof body.orderTotal !== "number" || isNaN(body.orderTotal)) {
+    body.orderTotal = 0;
+  }
+
   const { lineItems, orderTotal, declinedOfferId, funnelStep = 1, customerTags = [], orderCount, shippingCountry = "", collectionIds = [], totalQuantity } = body;
 
   // If a specific offer was declined, check for its fallback

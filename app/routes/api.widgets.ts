@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { verifyExtensionToken } from "../utils/verify-extension-token.server";
 import { handleCors, corsJson, corsError } from "../utils/cors.server";
+import { checkRateLimit } from "../utils/rate-limit.server";
 import db from "../db.server";
 
 export const loader = () => new Response(null, {
@@ -20,11 +21,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     } catch (err) {
       const status = err instanceof Response ? err.status : 500;
       const msg = err instanceof Response ? await err.text() : "Auth failed";
-        return corsError(msg, status);
+      return corsError(msg, status);
     }
 
-    const body = await request.json();
-    const { intent } = body;
+    // Rate limit: 30 requests per minute per shop
+    if (!checkRateLimit(`widgets:${shop}`, 30)) {
+      return corsError("Too many requests", 429);
+    }
+
+    let body: Record<string, any>;
+    try {
+      body = await request.json();
+    } catch {
+      return corsError("Invalid JSON body", 400);
+    }
+
+    const intent = typeof body.intent === "string" ? body.intent : undefined;
 
     if (!intent || intent === "config") {
       const widgets = await db.widgetConfig.findMany({
@@ -65,8 +77,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (intent === "survey_response") {
-      const { questionId, answer, orderId } = body;
-      if (!questionId || !answer) return corsError("Missing data", 400);
+      const questionId = typeof body.questionId === "string" ? body.questionId : "";
+      const answer = typeof body.answer === "string" ? body.answer.slice(0, 1000) : "";
+      const orderId = typeof body.orderId === "string" ? body.orderId : undefined;
+      if (!questionId || !answer) return corsError("Missing questionId or answer", 400);
 
       await db.surveyResponse.create({
         data: { shop, questionId, answer, orderId },
@@ -78,7 +92,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     }
 
     if (intent === "social_share") {
-      const { platform } = body;
+      const platform = typeof body.platform === "string" ? body.platform.slice(0, 50) : "unknown";
       await db.analyticsEvent.create({
         data: { shop, eventType: "social_share", metadata: JSON.stringify({ platform }) },
       });

@@ -6,6 +6,9 @@ export default async () => {
   render(<ThankYouPage />, document.body);
 };
 
+// ──────────────────────────────────────────
+// MAIN PAGE
+// ──────────────────────────────────────────
 function ThankYouPage() {
   const [widgetConfig, setWidgetConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,10 +40,10 @@ function ThankYouPage() {
 
   if (loading) {
     return (
-      <s-box padding="small-200" borderRadius="base" borderWidth="base">
-        <s-stack gap="small-200" alignItems="center">
+      <s-box padding="small-300" borderRadius="base" borderWidth="base">
+        <s-stack gap="small-100" alignItems="center">
           <s-spinner />
-          <s-text color="subdued">Loading...</s-text>
+          <s-text color="subdued">{shopify.i18n.translate("loading")}</s-text>
         </s-stack>
       </s-box>
     );
@@ -51,7 +54,7 @@ function ThankYouPage() {
   const surveyQuestions = widgetConfig?.survey || [];
 
   return (
-    <s-stack gap="small">
+    <s-stack gap="small-200">
       {enabledWidgets.map((widget, idx) => {
         switch (widget.type) {
           case "upsell":
@@ -66,9 +69,7 @@ function ThankYouPage() {
             return <ReorderWidget key={idx} />;
           case "custom_message":
             return branding?.customMessage ? (
-              <s-box key={idx} padding="small-200" borderRadius="base" borderWidth="base">
-                <s-text type="strong">{branding.customMessage}</s-text>
-              </s-box>
+              <CustomMessageWidget key={idx} message={branding.customMessage} />
             ) : null;
           default:
             return null;
@@ -212,11 +213,11 @@ function UpsellWidget({ branding }) {
     }
   }, [offer, funnelStep]);
 
-  // --- Render states ---
+  // ── Loading state ──
   if (state === "loading") {
     return (
       <s-box padding="small-200" borderRadius="base" borderWidth="base">
-        <s-stack gap="small-200" alignItems="center">
+        <s-stack gap="small-100" alignItems="center">
           <s-spinner />
           <s-text color="subdued">{shopify.i18n.translate("loading")}</s-text>
         </s-stack>
@@ -226,17 +227,20 @@ function UpsellWidget({ branding }) {
 
   if (state === "empty" || state === "declined" || state === "error") return null;
 
+  // ── Expired state ──
   if (state === "expired") {
     return (
       <s-box padding="small-200" borderRadius="base" borderWidth="base">
-        <s-stack gap="small-200">
-          <s-text type="strong">{shopify.i18n.translate("offerExpiredTitle")}</s-text>
+        <s-stack gap="small-100" alignItems="center">
+          <s-icon type="clock" size="large" tone="critical" />
+          <s-heading>{shopify.i18n.translate("offerExpiredTitle")}</s-heading>
           <s-text color="subdued">{shopify.i18n.translate("offerExpired")}</s-text>
         </s-stack>
       </s-box>
     );
   }
 
+  // ── Accepted state ──
   if (state === "accepted") {
     return (
       <s-banner heading={shopify.i18n.translate("acceptedTitle")} tone="success">
@@ -245,7 +249,7 @@ function UpsellWidget({ branding }) {
     );
   }
 
-  // --- Offer display ---
+  // ── Offer display ──
   const originalPrice = parseFloat(offer.productPrice);
   const discountedPrice = offer.discountType === "percentage"
     ? originalPrice * (1 - offer.discountValue / 100)
@@ -258,71 +262,155 @@ function UpsellWidget({ branding }) {
     : `${formatPrice(offer.discountValue)} ${shopify.i18n.translate("off")}`;
   const timerPercent = timeRemaining !== null && offer.timeLimitMinutes
     ? Math.max(0, (timeRemaining / (offer.timeLimitMinutes * 60)) * 100) : 0;
+  const isUrgent = timeRemaining !== null && timeRemaining < 60;
+
+  // Extension settings (configurable from theme editor)
+  const extensionSettings = shopify.settings?.value || {};
+  const buttonLayout = String(extensionSettings.button_layout || "") === "stacked" ? "stacked" : "side-by-side";
+  const declineText = String(extensionSettings.decline_text || "") || shopify.i18n.translate("noThanks");
+  const hidDecline = extensionSettings.hide_decline === true;
+  const acceptTone = /** @type {"auto" | "critical"} */ (
+    String(extensionSettings.accept_tone || "") === "critical" ? "critical" : "auto"
+  );
 
   return (
-    <s-box padding="small-200" borderRadius="base" borderWidth="base">
-      <s-stack gap="small-200">
-        {/* Badge row */}
-        <s-stack direction="inline" gap="small-100">
-          <s-badge>
-            {funnelStep > 1 ? shopify.i18n.translate("specialDeal") : shopify.i18n.translate("exclusiveOffer")}
-          </s-badge>
-          {offer.discountValue > 0 && <s-badge>{discountLabel}</s-badge>}
-        </s-stack>
+    <s-box borderRadius="base" borderWidth="base" overflow="hidden">
+      <s-stack gap="none">
 
-        {/* Title + description */}
-        <s-text type="strong">{offer.title}</s-text>
-        {offer.description && <s-text color="subdued">{offer.description}</s-text>}
-
-        {/* Product row: name + price inline */}
-        <s-box padding="small-200" borderRadius="base" background="subdued">
-          <s-stack gap="small-100">
-            <s-stack direction="inline" gap="small-200">
-              <s-text type="strong">{offer.productTitle}</s-text>
+        {/* ── Header banner ── */}
+        <s-box padding="small-200 small-300" background="subdued">
+          <s-stack direction="inline" gap="small-200" alignItems="center" justifyContent="space-between">
+            <s-stack direction="inline" gap="small-100" alignItems="center">
+              <s-icon type={funnelStep > 1 ? "star-filled" : "discount"} size="small" />
+              <s-heading>
+                {funnelStep > 1
+                  ? shopify.i18n.translate("specialDeal")
+                  : shopify.i18n.translate("exclusiveOffer")}
+              </s-heading>
             </s-stack>
             <s-stack direction="inline" gap="small-100">
-              <s-text type="strong">{formattedDiscounted}</s-text>
               {offer.discountValue > 0 && (
-                <s-text color="subdued">{formattedOriginal}</s-text>
+                <s-badge tone="critical" icon="savings">{discountLabel}</s-badge>
               )}
-              {savings > 0 && (
-                <s-text color="subdued">
-                  ({shopify.i18n.translate("youSave", { amount: formatPrice(savings) })})
-                </s-text>
+              {timeRemaining !== null && timeRemaining > 0 && (
+                <s-badge tone="critical" icon="clock">{shopify.i18n.translate("limitedTime")}</s-badge>
               )}
             </s-stack>
           </s-stack>
         </s-box>
 
-        {/* Timer bar */}
-        {timeRemaining !== null && timeRemaining > 0 && (
+        {/* ── Title & description ── */}
+        <s-box padding="small-200 small-300">
           <s-stack gap="small-100">
-            <s-text color="subdued">
-              {shopify.i18n.translate("expiresIn", { time: formatTime(timeRemaining) })}
-            </s-text>
-            <s-box borderRadius="small" background="subdued" blockSize="3px" overflow="hidden">
-              <s-box borderRadius="small" background="base" blockSize="3px" inlineSize={`${timerPercent}%`} />
-            </s-box>
+            <s-text type="strong">{offer.title}</s-text>
+            {offer.description && (
+              <s-text color="subdued">{offer.description}</s-text>
+            )}
           </s-stack>
+        </s-box>
+
+        {/* ── Product card ── */}
+        <s-box paddingInline="small-300" paddingBlock="small-100">
+          <s-box padding="small-200" borderRadius="base" borderWidth="base" background="subdued">
+            <s-stack direction="inline" gap="small-200" alignItems="center">
+              {offer.productImage && (
+                <s-product-thumbnail
+                  src={offer.productImage}
+                  alt={offer.productTitle}
+                  size="base"
+                />
+              )}
+              <s-stack gap="small-100">
+                <s-text type="strong">{offer.productTitle}</s-text>
+                <s-stack direction="inline" gap="small-100" alignItems="center">
+                  <s-text type="strong">{formattedDiscounted}</s-text>
+                  {offer.discountValue > 0 && (
+                    <s-text color="subdued">{formattedOriginal}</s-text>
+                  )}
+                </s-stack>
+                {savings > 0 && (
+                  <s-badge icon="savings">
+                    {shopify.i18n.translate("youSave", { amount: formatPrice(savings) })}
+                  </s-badge>
+                )}
+              </s-stack>
+            </s-stack>
+          </s-box>
+        </s-box>
+
+        {/* ── Countdown timer ── */}
+        {timeRemaining !== null && timeRemaining > 0 && (
+          <s-box paddingInline="small-300" paddingBlock="small-100">
+            <s-stack gap="small-100">
+              <s-stack direction="inline" gap="small-100" alignItems="center" justifyContent="space-between">
+                <s-stack direction="inline" gap="small-100" alignItems="center">
+                  <s-icon type="clock" size="small-200" tone={isUrgent ? "critical" : "auto"} />
+                  <s-text color="subdued" type="strong">
+                    {shopify.i18n.translate("expiresIn", { time: formatTime(timeRemaining) })}
+                  </s-text>
+                </s-stack>
+                {isUrgent && <s-badge tone="critical" icon="alert-circle">{shopify.i18n.translate("hurry")}</s-badge>}
+              </s-stack>
+              <s-progress
+                value={timerPercent}
+                max={100}
+                tone={isUrgent ? "critical" : "auto"}
+                accessibilityLabel={shopify.i18n.translate("expiresIn", { time: formatTime(timeRemaining) })}
+              />
+            </s-stack>
+          </s-box>
         )}
 
-        {/* Trust signals */}
+        {/* ── Trust signals ── */}
         {(branding?.showTrustBadges !== false) && (
-          <s-stack direction="inline" gap="small-200">
-            <s-text color="subdued">{shopify.i18n.translate("oneClick")}</s-text>
-            <s-text color="subdued">{shopify.i18n.translate("secureCheckout")}</s-text>
-          </s-stack>
+          <s-box paddingInline="small-300" paddingBlock="small-100">
+            <s-stack direction="inline" gap="small-300" justifyContent="center" alignItems="center">
+              <s-stack direction="inline" gap="small-100" alignItems="center">
+                <s-icon type="cart" size="small-200" />
+                <s-text color="subdued">{shopify.i18n.translate("oneClick")}</s-text>
+              </s-stack>
+              <s-stack direction="inline" gap="small-100" alignItems="center">
+                <s-icon type="lock" size="small-200" />
+                <s-text color="subdued">{shopify.i18n.translate("secureCheckout")}</s-text>
+              </s-stack>
+              <s-stack direction="inline" gap="small-100" alignItems="center">
+                <s-icon type="check-circle" size="small-200" />
+                <s-text color="subdued">{shopify.i18n.translate("moneyBack")}</s-text>
+              </s-stack>
+            </s-stack>
+          </s-box>
         )}
 
-        {/* CTA Buttons */}
-        <s-stack direction="inline" gap="small-200">
-          <s-button variant="primary" onClick={handleAccept} loading={accepting}>
-            {offer.ctaText || shopify.i18n.translate("addToOrder")}
-          </s-button>
-          <s-button variant="secondary" onClick={handleDecline}>
-            {shopify.i18n.translate("noThanks")}
-          </s-button>
-        </s-stack>
+        {/* ── CTA Buttons ── */}
+        <s-box paddingInline="small-300" paddingBlock="small-200">
+          {hidDecline ? (
+            <s-grid gridTemplateColumns="1fr 1fr" gap="small-100" alignItems="center">
+              <s-box />
+              <s-button variant="primary" inlineSize="fill" tone={acceptTone} onClick={handleAccept} loading={accepting}>
+                {offer.ctaText || shopify.i18n.translate("addToOrder")}
+              </s-button>
+            </s-grid>
+          ) : buttonLayout === "stacked" ? (
+            <s-stack gap="small-100">
+              <s-button variant="primary" inlineSize="fill" tone={acceptTone} onClick={handleAccept} loading={accepting}>
+                {offer.ctaText || shopify.i18n.translate("addToOrder")}
+              </s-button>
+              <s-button variant="secondary" inlineSize="fill" onClick={handleDecline}>
+                {declineText}
+              </s-button>
+            </s-stack>
+          ) : (
+            <s-grid gridTemplateColumns="1fr 1fr" gap="small-100" alignItems="center">
+              <s-button variant="primary" inlineSize="fill" tone={acceptTone} onClick={handleAccept} loading={accepting}>
+                {offer.ctaText || shopify.i18n.translate("addToOrder")}
+              </s-button>
+              <s-button variant="secondary" inlineSize="fill" onClick={handleDecline}>
+                {declineText}
+              </s-button>
+            </s-grid>
+          )}
+        </s-box>
+
       </s-stack>
     </s-box>
   );
@@ -333,28 +421,50 @@ function UpsellWidget({ branding }) {
 // ──────────────────────────────────────────
 function SocialShareWidget({ settings }) {
   const shopDomain = shopify.shop?.myshopifyDomain || "";
-  const shopUrl = shopDomain ? `https://${shopDomain}` : "";
-  const shareText = settings?.shareMessage || "I just bought something awesome! Check this store out:";
+  const lines = shopify.lines?.value || [];
+  const productTitle = lines[0]?.merchandise?.title || "";
+  const productHandle = productTitle
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  const shareUrl = productHandle && shopDomain
+    ? `https://${shopDomain}/products/${productHandle}`
+    : shopDomain ? `https://${shopDomain}` : "";
 
-  // Share intent URLs — always open compose/share dialogs
+  const shareText = settings?.shareMessage
+    || (productTitle ? `I just bought ${productTitle}! Check it out:` : "I just bought something awesome! Check this store out:");
+
   const shareUrls = {
-    twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shopUrl)}`,
-    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shopUrl)}`,
-    whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText + " " + shopUrl)}`,
+    twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`,
+    facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
+    whatsapp: `https://wa.me/?text=${encodeURIComponent(shareText + " " + shareUrl)}`,
   };
 
   return (
-    <s-box padding="small-200" borderRadius="base" borderWidth="base">
-      <s-stack gap="small-200">
-        {/* Share buttons */}
-        <s-text type="strong">{shopify.i18n.translate("shareTitle")}</s-text>
-        <s-text color="subdued">{shopify.i18n.translate("shareDescription")}</s-text>
-        <s-stack direction="inline" gap="small-200">
-          <s-button variant="secondary" href={shareUrls.twitter} target="_blank">𝕏 Share</s-button>
-          <s-button variant="secondary" href={shareUrls.facebook} target="_blank">f Share</s-button>
-          <s-button variant="secondary" href={shareUrls.whatsapp} target="_blank">✆ Share</s-button>
-        </s-stack>
-
+    <s-box borderRadius="base" borderWidth="base" overflow="hidden">
+      <s-stack gap="none">
+        <s-box padding="small-200 small-300" background="subdued">
+          <s-stack direction="inline" gap="small-100" alignItems="center">
+            <s-icon type="globe" size="small" />
+            <s-heading>{shopify.i18n.translate("shareTitle")}</s-heading>
+          </s-stack>
+        </s-box>
+        <s-box padding="small-200 small-300">
+          <s-stack gap="small-200">
+            <s-text color="subdued">{shopify.i18n.translate("shareDescription")}</s-text>
+            <s-grid gridTemplateColumns="1fr 1fr 1fr" gap="small-100">
+              <s-button variant="secondary" inlineSize="fill" href={shareUrls.twitter} target="_blank">
+                X
+              </s-button>
+              <s-button variant="secondary" inlineSize="fill" href={shareUrls.facebook} target="_blank">
+                Facebook
+              </s-button>
+              <s-button variant="secondary" inlineSize="fill" href={shareUrls.whatsapp} target="_blank">
+                WhatsApp
+              </s-button>
+            </s-grid>
+          </s-stack>
+        </s-box>
       </s-stack>
     </s-box>
   );
@@ -408,9 +518,10 @@ function SurveyWidget({ questions }) {
 
   if (submitted) {
     return (
-      <s-box padding="small-200" borderRadius="base" borderWidth="base">
-        <s-stack gap="small-200" alignItems="center">
-          <s-text type="strong">{shopify.i18n.translate("surveyThanks")}</s-text>
+      <s-box borderRadius="base" borderWidth="base" padding="small-300">
+        <s-stack gap="small-100" alignItems="center">
+          <s-icon type="check-circle-filled" size="large" tone="success" />
+          <s-heading>{shopify.i18n.translate("surveyThanks")}</s-heading>
           <s-text color="subdued">{shopify.i18n.translate("surveyHelps")}</s-text>
         </s-stack>
       </s-box>
@@ -420,63 +531,84 @@ function SurveyWidget({ questions }) {
   const q = questions[currentIdx];
 
   return (
-    <s-box padding="small-200" borderRadius="base" borderWidth="base">
-      <s-stack gap="small-200">
-        <s-stack direction="inline" gap="small-200">
-          <s-badge>{currentIdx + 1}/{questions.length}</s-badge>
-          <s-text type="strong">{shopify.i18n.translate("quickSurvey")}</s-text>
-        </s-stack>
-
-        <s-text>{q.question}</s-text>
-
-        {q.type === "rating" && (
-          <s-stack direction="inline" gap="small-100">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <s-button
-                key={star}
-                variant={rating >= star ? "primary" : "secondary"}
-                onClick={() => setRating(star)}
-              >
-                {star}
-              </s-button>
-            ))}
+    <s-box borderRadius="base" borderWidth="base" overflow="hidden">
+      <s-stack gap="none">
+        {/* Header */}
+        <s-box padding="small-200 small-300" background="subdued">
+          <s-stack direction="inline" gap="small-100" alignItems="center" justifyContent="space-between">
+            <s-stack direction="inline" gap="small-100" alignItems="center">
+              <s-icon type="note" size="small" />
+              <s-heading>{shopify.i18n.translate("quickSurvey")}</s-heading>
+            </s-stack>
+            <s-badge>{currentIdx + 1}/{questions.length}</s-badge>
           </s-stack>
-        )}
+        </s-box>
 
-        {q.type === "text" && (
-          <s-text-field
-            label="Your answer"
-            value={textAnswer}
-            onChange={(e) => setTextAnswer(/** @type {any} */ (e).target.value)}
-          />
-        )}
+        {/* Progress */}
+        <s-progress
+          value={currentIdx + 1}
+          max={questions.length}
+          accessibilityLabel={`Question ${currentIdx + 1} of ${questions.length}`}
+        />
 
-        {q.type === "multiple_choice" && (
-          <s-stack direction="inline" gap="small-100">
-            {q.options.map((opt) => (
-              <s-button
-                key={opt}
-                variant={textAnswer === opt ? "primary" : "secondary"}
-                onClick={() => setTextAnswer(opt)}
-              >
-                {opt}
-              </s-button>
-            ))}
+        {/* Question */}
+        <s-box padding="small-200 small-300">
+          <s-stack gap="small-200">
+            <s-text type="strong">{q.question}</s-text>
+
+            {/* Rating stars */}
+            {q.type === "rating" && (
+              <s-stack direction="inline" gap="small-100">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <s-clickable key={star} onClick={() => setRating(star)}>
+                    <s-icon type={rating >= star ? "star-filled" : "star"} size="large" tone={rating >= star ? "info" : "auto"} />
+                  </s-clickable>
+                ))}
+              </s-stack>
+            )}
+
+            {/* Text input */}
+            {q.type === "text" && (
+              <s-text-field
+                label={shopify.i18n.translate("surveyPlaceholder")}
+                value={textAnswer}
+                onChange={(e) => setTextAnswer(/** @type {any} */(e).target.value)}
+              />
+            )}
+
+            {/* Multiple choice */}
+            {q.type === "multiple_choice" && (
+              <s-stack direction="inline" gap="small-100">
+                {q.options.map((opt) => (
+                  <s-button
+                    key={opt}
+                    variant={textAnswer === opt ? "primary" : "secondary"}
+                    onClick={() => setTextAnswer(opt)}
+                  >
+                    {textAnswer === opt ? `\u2713 ${opt}` : opt}
+                  </s-button>
+                ))}
+              </s-stack>
+            )}
           </s-stack>
-        )}
+        </s-box>
 
-        <s-stack direction="inline" gap="small-200">
-          {currentIdx > 0 && (
-            <s-button variant="secondary" onClick={() => { setCurrentIdx(currentIdx - 1); setRating(0); setTextAnswer(""); }}>
-              {shopify.i18n.translate("previous")}
+        {/* Navigation */}
+        <s-divider />
+        <s-box paddingInline="small-300" paddingBlock="small-200">
+          <s-grid gridTemplateColumns="1fr 1fr" gap="small-100" alignItems="center">
+            {currentIdx > 0 ? (
+              <s-button variant="secondary" inlineSize="fill" onClick={() => { setCurrentIdx(currentIdx - 1); setRating(0); setTextAnswer(""); }}>
+                {shopify.i18n.translate("previous")}
+              </s-button>
+            ) : <s-box />}
+            <s-button variant="primary" inlineSize="fill" onClick={handleNext}>
+              {currentIdx < questions.length - 1
+                ? shopify.i18n.translate("next")
+                : shopify.i18n.translate("submit")}
             </s-button>
-          )}
-          <s-button variant="primary" onClick={handleNext}>
-            {currentIdx < questions.length - 1
-              ? shopify.i18n.translate("next")
-              : shopify.i18n.translate("submit")}
-          </s-button>
-        </s-stack>
+          </s-grid>
+        </s-box>
       </s-stack>
     </s-box>
   );
@@ -489,12 +621,9 @@ function ReorderWidget() {
   const shopDomain = shopify.shop?.myshopifyDomain || "";
   const lines = shopify.lines?.value || [];
 
-  // Build Shopify cart URL: /cart/variant_id:qty,variant_id:qty
-  // This pre-fills the cart with the same items from this order
   const variantIds = lines
     .map((line) => {
       const variantGid = line.merchandise?.id || "";
-      // Extract numeric ID from gid://shopify/ProductVariant/123
       const numericId = variantGid.split("/").pop();
       return numericId ? `${numericId}:${line.quantity || 1}` : null;
     })
@@ -505,13 +634,39 @@ function ReorderWidget() {
     : `https://${shopDomain}`;
 
   return (
-    <s-box padding="small-200" borderRadius="base" borderWidth="base">
-      <s-stack gap="small-200">
-        <s-text type="strong">{shopify.i18n.translate("reorderTitle")}</s-text>
-        <s-text color="subdued">{shopify.i18n.translate("reorderDescription")}</s-text>
-        <s-button variant="secondary" href={reorderUrl} target="_blank">
-          {shopify.i18n.translate("reorderButton")}
-        </s-button>
+    <s-box borderRadius="base" borderWidth="base" overflow="hidden">
+      <s-stack gap="none">
+        <s-box padding="small-200 small-300" background="subdued">
+          <s-stack direction="inline" gap="small-100" alignItems="center">
+            <s-icon type="reorder" size="small" />
+            <s-heading>{shopify.i18n.translate("reorderTitle")}</s-heading>
+          </s-stack>
+        </s-box>
+        <s-box padding="small-200 small-300">
+          <s-stack gap="small-200">
+            <s-text color="subdued">{shopify.i18n.translate("reorderDescription")}</s-text>
+            <s-grid gridTemplateColumns="1fr 1fr" gap="small-100" alignItems="center">
+              <s-box />
+              <s-button variant="secondary" inlineSize="fill" href={reorderUrl} target="_blank">
+                {shopify.i18n.translate("reorderButton")}
+              </s-button>
+            </s-grid>
+          </s-stack>
+        </s-box>
+      </s-stack>
+    </s-box>
+  );
+}
+
+// ──────────────────────────────────────────
+// CUSTOM MESSAGE WIDGET
+// ──────────────────────────────────────────
+function CustomMessageWidget({ message }) {
+  return (
+    <s-box borderRadius="base" borderWidth="base" padding="small-200 small-300">
+      <s-stack direction="inline" gap="small-100" alignItems="center">
+        <s-icon type="info" size="small" />
+        <s-text type="strong">{message}</s-text>
       </s-stack>
     </s-box>
   );
