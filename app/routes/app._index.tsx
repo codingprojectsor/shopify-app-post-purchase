@@ -205,8 +205,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   if (intent === "seed") {
-    // Fetch products from store and create demo offers
     const { admin } = await authenticate.admin(request);
+    const shop = session.shop;
+
     const response = await admin.graphql(
       `#graphql
       query {
@@ -226,109 +227,146 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
 
     const data = await response.json();
-    const products =
-      data.data?.products?.edges?.map((e: any) => e.node) || [];
+    const products = data.data?.products?.edges?.map((e: any) => e.node) || [];
 
-    if (products.length < 2) {
-      return { error: "Need at least 2 products in your store" };
+    if (products.length < 3) {
+      return { error: "Need at least 3 products in your store" };
     }
 
-    const configs = [
-      { type: "percentage", value: 15, title: "Complete Your Look", cta: "Yes, Add This!", min: 5 },
-      { type: "percentage", value: 20, title: "Exclusive Bundle Deal", cta: "Grab This Deal!", min: 3 },
-      { type: "fixed", value: 5, title: "Add This & Save", cta: "Add to Order", min: null },
-      { type: "percentage", value: 25, title: "VIP Customer Offer", cta: "Claim Now!", min: 10 },
-      { type: "percentage", value: 10, title: "Don't Miss This", cta: "Yes Please!", min: 2 },
-      { type: "fixed", value: 10, title: "Special Thank-You Discount", cta: "Add & Save", min: 5 },
-      { type: "percentage", value: 30, title: "Flash Sale - Just For You", cta: "Get 30% Off!", min: 1 },
-      { type: "percentage", value: 15, title: "Customers Also Bought", cta: "Add to My Order", min: null },
-      { type: "fixed", value: 3, title: "Try Something New", cta: "Sure, Add It!", min: null },
-      { type: "percentage", value: 20, title: "Last Chance Offer", cta: "Claim Discount!", min: 2 },
-    ];
+    const gp = (i: number) => {
+      const p = products[i % products.length];
+      return {
+        id: p.id,
+        variantId: p.variants.edges[0]?.node?.id || "",
+        title: p.title,
+        image: p.featuredMedia?.preview?.image?.url || null,
+        price: p.variants.edges[0]?.node?.price || "0.00",
+      };
+    };
 
-    const ids: string[] = [];
-    for (let i = 0; i < Math.min(products.length, 10); i++) {
-      const p = products[i];
-      const v = p.variants.edges[0]?.node;
-      const c = configs[i % configs.length];
+    // A/B Test
+    const abTest = await db.aBTest.create({
+      data: { shop, name: "Homepage vs Urgency CTA", description: "Testing which CTA style converts better", status: "running", splitPercent: 50, startedAt: new Date() },
+    });
 
-      const offer = await db.upsellOffer.create({
-        data: {
-          shop: session.shop,
-          title: c.title,
-          description: `Get ${p.title} at a special price — only available right now!`,
-          ctaText: c.cta,
-          productId: p.id,
-          variantId: v?.id || "",
-          productTitle: p.title,
-          productImage: p.featuredMedia?.preview?.image?.url || null,
-          productPrice: v?.price || "0.00",
-          discountType: c.type,
-          discountValue: c.value,
-          timeLimitMinutes: c.min,
-          status: "active",
-          testMode: false,
-          priority: 10 - i,
-        },
-      });
-      ids.push(offer.id);
-    }
+    // Offer 1: Percentage + timer + funnel start
+    const p0 = gp(0);
+    const offer1 = await db.upsellOffer.create({
+      data: { shop, title: "VIP Customer Offer", description: `Get ${p0.title} at a special price — only available right now!`, ctaText: "Claim Now!", productId: p0.id, variantId: p0.variantId, productTitle: p0.title, productImage: p0.image, productPrice: p0.price, discountType: "percentage", discountValue: 25, timeLimitMinutes: 5, status: "active", priority: 10 },
+    });
 
-    // Set up funnel: first → second
-    if (ids.length >= 2) {
-      await db.upsellOffer.update({
-        where: { id: ids[0] },
-        data: { fallbackOfferId: ids[1] },
-      });
-    }
+    // Offer 2: Fixed discount, no timer (funnel fallback)
+    const p1 = gp(1);
+    const offer2 = await db.upsellOffer.create({
+      data: { shop, title: "Special Thank-You Discount", description: `Add ${p1.title} to your order and save!`, ctaText: "Add & Save $10", productId: p1.id, variantId: p1.variantId, productTitle: p1.title, productImage: p1.image, productPrice: p1.price, discountType: "fixed", discountValue: 10, timeLimitMinutes: null, status: "active", priority: 9 },
+    });
 
-    // Seed widgets
+    // Offer 3: Big percentage + short timer (funnel end)
+    const p2 = gp(2);
+    const offer3 = await db.upsellOffer.create({
+      data: { shop, title: "Flash Sale — Last Chance!", description: `30% off ${p2.title} — this deal expires fast!`, ctaText: "Get 30% Off!", productId: p2.id, variantId: p2.variantId, productTitle: p2.title, productImage: p2.image, productPrice: p2.price, discountType: "percentage", discountValue: 30, timeLimitMinutes: 2, status: "active", priority: 8 },
+    });
+
+    // Offer 4: A/B variant A
+    const p3 = gp(3);
+    const offerA = await db.upsellOffer.create({
+      data: { shop, title: "Complete Your Look", description: `${p3.title} pairs perfectly with your purchase.`, ctaText: "Yes, Add This!", productId: p3.id, variantId: p3.variantId, productTitle: p3.title, productImage: p3.image, productPrice: p3.price, discountType: "percentage", discountValue: 15, timeLimitMinutes: 3, status: "active", priority: 7, abTestId: abTest.id },
+    });
+
+    // Offer 5: A/B variant B
+    const p4 = gp(4);
+    const offerB = await db.upsellOffer.create({
+      data: { shop, title: "Exclusive Bundle Deal", description: `Save $5 when you add ${p4.title} now!`, ctaText: "Grab This Deal!", productId: p4.id, variantId: p4.variantId, productTitle: p4.title, productImage: p4.image, productPrice: p4.price, discountType: "fixed", discountValue: 5, timeLimitMinutes: null, status: "active", priority: 6, abTestId: abTest.id },
+    });
+
+    // Offer 6: Scheduled (tomorrow → next week)
+    const p5 = gp(5);
+    const tmrw = new Date(); tmrw.setDate(tmrw.getDate() + 1);
+    const nxtWk = new Date(); nxtWk.setDate(nxtWk.getDate() + 7);
+    await db.upsellOffer.create({
+      data: { shop, title: "Weekend Special", description: "This offer is only available this weekend!", ctaText: "Get Weekend Deal!", productId: p5.id, variantId: p5.variantId, productTitle: p5.title, productImage: p5.image, productPrice: p5.price, discountType: "percentage", discountValue: 20, timeLimitMinutes: 10, status: "active", priority: 5, scheduledStart: tmrw, scheduledEnd: nxtWk },
+    });
+
+    // Offer 7: Draft
+    const p6 = gp(6);
+    await db.upsellOffer.create({
+      data: { shop, title: "Draft — Coming Soon Offer", description: "This offer is still being prepared.", ctaText: "Add to Order", productId: p6.id, variantId: p6.variantId, productTitle: p6.title, productImage: p6.image, productPrice: p6.price, discountType: "percentage", discountValue: 10, timeLimitMinutes: null, status: "draft", priority: 1 },
+    });
+
+    // Offer 8: Paused
+    const p7 = gp(7);
+    await db.upsellOffer.create({
+      data: { shop, title: "Paused Holiday Deal", description: "Paused until the next holiday season.", ctaText: "Claim Holiday Discount!", productId: p7.id, variantId: p7.variantId, productTitle: p7.title, productImage: p7.image, productPrice: p7.price, discountType: "fixed", discountValue: 15, timeLimitMinutes: 5, status: "paused", priority: 2 },
+    });
+
+    // Offer 9: Test mode
+    const p8 = gp(8);
+    await db.upsellOffer.create({
+      data: { shop, title: "Test Mode — Dev Only", description: "Only visible in test mode.", ctaText: "Test Add", productId: p8.id, variantId: p8.variantId, productTitle: p8.title, productImage: p8.image, productPrice: p8.price, discountType: "percentage", discountValue: 50, timeLimitMinutes: 1, status: "active", testMode: true, priority: 0 },
+    });
+
+    // Offer 10: No discount (pure recommendation)
+    const p9 = gp(9);
+    await db.upsellOffer.create({
+      data: { shop, title: "Customers Also Bought", description: `Other customers loved ${p9.title} — you might too!`, ctaText: "Add to My Order", productId: p9.id, variantId: p9.variantId, productTitle: p9.title, productImage: p9.image, productPrice: p9.price, discountType: "percentage", discountValue: 0, timeLimitMinutes: null, status: "active", priority: 3 },
+    });
+
+    // Funnel chain: 1 → 2 → 3
+    await db.upsellOffer.update({ where: { id: offer1.id }, data: { fallbackOfferId: offer2.id } });
+    await db.upsellOffer.update({ where: { id: offer2.id }, data: { fallbackOfferId: offer3.id } });
+
+    // Targeting rules (all types)
+    await db.targetingRule.createMany({
+      data: [
+        { offerId: offer1.id, ruleType: "cart_value", operator: "greater_than", value: "50" },
+        { offerId: offer1.id, ruleType: "shipping_country", operator: "equals", value: "US" },
+        { offerId: offer2.id, ruleType: "quantity", operator: "greater_than", value: "1" },
+        { offerId: offer3.id, ruleType: "customer_tag", operator: "equals", value: "VIP" },
+        { offerId: offerA.id, ruleType: "product", operator: "contains", value: p0.id },
+        { offerId: offerB.id, ruleType: "order_count", operator: "greater_than", value: "0" },
+      ],
+    });
+
+    // Widgets
     const widgetTypes = ["upsell", "social_share", "survey", "reorder", "custom_message"];
     for (let i = 0; i < widgetTypes.length; i++) {
       await db.widgetConfig.upsert({
-        where: { shop_widgetType: { shop: session.shop, widgetType: widgetTypes[i] } },
-        update: { enabled: true, position: i },
-        create: { shop: session.shop, widgetType: widgetTypes[i], enabled: true, position: i },
+        where: { shop_widgetType: { shop, widgetType: widgetTypes[i] } },
+        update: { enabled: i < 4, position: i },
+        create: { shop, widgetType: widgetTypes[i], enabled: i < 4, position: i, settings: widgetTypes[i] === "social_share" ? JSON.stringify({ shareMessage: "I just got an amazing deal! Check this out:" }) : "{}" },
       });
     }
 
-    // Seed social share settings
-    await db.widgetConfig.update({
-      where: { shop_widgetType: { shop: session.shop, widgetType: "social_share" } },
-      data: {
-        settings: JSON.stringify({
-          shareMessage: "I just bought something awesome! Check this store out:",
-          twitterUrl: "",
-          facebookUrl: "",
-          whatsappNumber: "",
-        }),
-      },
-    });
-
-    // Seed survey questions
-    const existingQuestions = await db.surveyQuestion.count({ where: { shop: session.shop } });
-    if (existingQuestions === 0) {
+    // Survey questions
+    const existingQ = await db.surveyQuestion.count({ where: { shop } });
+    if (existingQ === 0) {
       await db.surveyQuestion.createMany({
         data: [
-          { shop: session.shop, question: "How was your checkout experience?", questionType: "rating", position: 0 },
-          { shop: session.shop, question: "How did you hear about us?", questionType: "multiple_choice", options: JSON.stringify(["Social media", "Friend", "Google search", "Ad", "Other"]), position: 1 },
-          { shop: session.shop, question: "Any feedback for us?", questionType: "text", position: 2 },
+          { shop, question: "How was your checkout experience?", questionType: "rating", position: 0 },
+          { shop, question: "How did you hear about us?", questionType: "multiple_choice", options: JSON.stringify(["Instagram", "Google", "Friend", "Ad", "Other"]), position: 1 },
+          { shop, question: "Anything we can improve?", questionType: "text", position: 2 },
         ],
       });
     }
 
-    // Seed branding
+    // Branding
     await db.brandingConfig.upsert({
-      where: { shop: session.shop },
+      where: { shop },
       update: {},
-      create: {
-        shop: session.shop,
-        showTrustBadges: true,
-        customMessage: "Thank you for your purchase! Here's a special offer just for you.",
-      },
+      create: { shop, primaryColor: "#2563eb", accentColor: "#16a34a", buttonStyle: "rounded", showTrustBadges: true, customMessage: "Thank you for your purchase! We appreciate your business." },
     });
 
-    return { success: true, seeded: ids.length };
+    // Analytics events (50 events over 14 days)
+    const evTypes = ["view", "accept", "decline"];
+    const evData = [];
+    for (let i = 0; i < 50; i++) {
+      const d = new Date(); d.setDate(d.getDate() - Math.floor(Math.random() * 14));
+      const et = evTypes[Math.floor(Math.random() * 3)];
+      evData.push({ shop, offerId: [offer1.id, offer2.id, offer3.id, offerA.id, offerB.id][i % 5], eventType: et, revenue: et === "accept" ? Math.round(Math.random() * 100 * 100) / 100 : null, funnelStep: Math.floor(Math.random() * 3) + 1, abTestId: i % 5 >= 3 ? abTest.id : null, createdAt: d });
+    }
+    await db.analyticsEvent.createMany({ data: evData });
+
+    return { success: true, seeded: 10 };
   }
 
   return { success: false };

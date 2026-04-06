@@ -741,122 +741,132 @@ export default function NewOffer() {
               </s-stack>
               <s-divider />
 
-              {/* Preview card (mimics extension UI) */}
+              {/* Preview card (matches extension UI) */}
               <s-box
-                padding="base"
                 borderWidth="base"
-                borderRadius="large"
-                background="base"
+                borderRadius="base"
+                overflow="hidden"
               >
-                <s-stack gap="base">
-                  {/* Badges */}
-                  <s-stack direction="inline" gap="small-200">
-                    <s-badge tone="info">Exclusive Offer</s-badge>
-                    {discount > 0 && (
-                      <s-badge tone="success">
-                        {discountType === "percentage"
-                          ? `${discount}% off`
-                          : `$${discount} off`}
-                      </s-badge>
-                    )}
-                  </s-stack>
-
-                  {/* Title */}
-                  <s-text type="strong">{title || "Your Offer Title"}</s-text>
-                  {description && (
-                    <s-text color="subdued">{description}</s-text>
-                  )}
-
-                  {/* Product preview */}
-                  {selectedProduct ? (
-                    <s-box
-                      padding="small-200"
-                      borderRadius="base"
-                      borderWidth="base"
-                      background="subdued"
-                    >
-                      <s-stack direction="inline" gap="base">
-                        {selectedProduct.productImage && (
-                          <s-thumbnail
-                            src={selectedProduct.productImage}
-                            alt={selectedProduct.productTitle}
-                            size="base"
-                          />
+                <s-stack gap="none">
+                  {/* Header banner */}
+                  <s-box padding="small-200 small-300" background="subdued">
+                    <s-stack direction="inline" gap="small-200" alignItems="center" justifyContent="space-between">
+                      <s-stack direction="inline" gap="small-100" alignItems="center">
+                        <s-icon type="discount" size="small" />
+                        <s-text type="strong">Exclusive Offer</s-text>
+                      </s-stack>
+                      <s-stack direction="inline" gap="small-100">
+                        {discount > 0 && (
+                          <s-badge tone="critical">
+                            {discountType === "percentage"
+                              ? `${discount}% off`
+                              : `$${discount} off`}
+                          </s-badge>
                         )}
-                        <s-stack gap="small-100">
-                          <s-text type="strong">
-                            {selectedProduct.productTitle}
-                          </s-text>
-                          <s-stack direction="inline" gap="small-100">
+                        {Number(timeLimitMinutes) > 0 && (
+                          <s-badge tone="critical">Limited Time</s-badge>
+                        )}
+                      </s-stack>
+                    </s-stack>
+                  </s-box>
+
+                  {/* Title & description */}
+                  <s-box padding="small-200 small-300">
+                    <s-stack gap="small-100">
+                      <s-text type="strong">{title || "Your Offer Title"}</s-text>
+                      {description && (
+                        <s-text color="subdued">{description}</s-text>
+                      )}
+                    </s-stack>
+                  </s-box>
+
+                  {/* Product card */}
+                  <s-box paddingInline="small-300" paddingBlock="small-100">
+                    {selectedProduct ? (
+                      <s-box padding="small-200" borderRadius="base" borderWidth="base" background="subdued">
+                        <s-stack direction="inline" gap="small-200" alignItems="center">
+                          {selectedProduct.productImage && (
+                            <s-thumbnail
+                              src={selectedProduct.productImage}
+                              alt={selectedProduct.productTitle}
+                              size="base"
+                            />
+                          )}
+                          <s-stack gap="small-100">
                             <s-text type="strong">
-                              ${finalPrice.toFixed(2)}
+                              {selectedProduct.productTitle}
                             </s-text>
-                            {discount > 0 && (
-                              <s-text color="subdued">
-                                ${originalPrice.toFixed(2)}
+                            <s-stack direction="inline" gap="small-100" alignItems="center">
+                              <s-text type="strong">
+                                ${finalPrice.toFixed(2)}
                               </s-text>
+                              {discount > 0 && (
+                                <s-text color="subdued">
+                                  ${originalPrice.toFixed(2)}
+                                </s-text>
+                              )}
+                            </s-stack>
+                            {savings > 0 && (
+                              <s-badge>
+                                You save ${savings.toFixed(2)}
+                              </s-badge>
                             )}
                           </s-stack>
-                          {savings > 0 && (
-                            <s-paragraph tone="success">
-                              You save ${savings.toFixed(2)}
-                            </s-paragraph>
-                          )}
                         </s-stack>
-                      </s-stack>
-                    </s-box>
-                  ) : (
-                    <s-box
-                      padding="base"
-                      borderRadius="base"
-                      background="subdued"
-                    >
-                      <s-text color="subdued">
-                        Product preview will appear here
-                      </s-text>
-                    </s-box>
-                  )}
+                      </s-box>
+                    ) : (
+                      <s-box padding="base" borderRadius="base" background="subdued">
+                        <s-text color="subdued">
+                          Product preview will appear here
+                        </s-text>
+                      </s-box>
+                    )}
+                  </s-box>
 
                   {/* Timer preview */}
-                  {timeLimitMinutes && (
-                    <s-stack gap="small-100">
-                      <s-text color="subdued">
-                        Expires in {timeLimitMinutes}:00
-                      </s-text>
-                      <s-box
-                        borderRadius="base"
-                        background="subdued"
-                        blockSize="4px"
-                      >
-                        <s-box
-                          borderRadius="base"
-                          background="base"
-                          blockSize="4px"
-                          inlineSize="100%"
-                        />
-                      </s-box>
-                    </s-stack>
+                  {Number(timeLimitMinutes) > 0 && (
+                    <s-box paddingInline="small-300" paddingBlock="small-100">
+                      <s-stack gap="small-100">
+                        <s-stack direction="inline" gap="small-100" alignItems="center">
+                          <s-icon type="clock" size="small" />
+                          <s-text color="subdued" type="strong">
+                            Offer expires in {timeLimitMinutes}:00
+                          </s-text>
+                        </s-stack>
+                        <s-box borderRadius="base" background="subdued" blockSize="4px" overflow="hidden">
+                          <s-box borderRadius="base" background="base" blockSize="4px" inlineSize="100%" />
+                        </s-box>
+                      </s-stack>
+                    </s-box>
                   )}
 
                   {/* Trust signals */}
-                  <s-stack direction="inline" gap="base">
-                    <s-stack direction="inline" gap="small-100">
-                      <s-icon type="bolt" color="subdued" size="small" />
-                      <s-text color="subdued">One-click add</s-text>
+                  <s-box paddingInline="small-300" paddingBlock="small-100">
+                    <s-stack direction="inline" gap="small-300" justifyContent="center" alignItems="center">
+                      <s-stack direction="inline" gap="small-100" alignItems="center">
+                        <s-icon type="cart" size="small" />
+                        <s-text color="subdued">One-click add</s-text>
+                      </s-stack>
+                      <s-stack direction="inline" gap="small-100" alignItems="center">
+                        <s-icon type="lock" size="small" />
+                        <s-text color="subdued">Secure checkout</s-text>
+                      </s-stack>
+                      <s-stack direction="inline" gap="small-100" alignItems="center">
+                        <s-icon type="check" size="small" />
+                        <s-text color="subdued">Money-back guarantee</s-text>
+                      </s-stack>
                     </s-stack>
-                    <s-stack direction="inline" gap="small-100">
-                      <s-icon type="lock" color="subdued" size="small" />
-                      <s-text color="subdued">Secure</s-text>
-                    </s-stack>
-                  </s-stack>
+                  </s-box>
 
                   {/* Buttons */}
-                  <s-stack direction="inline" gap="small-200">
-                    <s-button variant="primary">
-                      {ctaText || "Add to Order"}
-                    </s-button>
-                    <s-button variant="secondary">No thanks</s-button>
-                  </s-stack>
+                  <s-box paddingInline="small-300" paddingBlock="small-200">
+                    <s-stack direction="inline" gap="small-100">
+                      <s-button variant="primary">
+                        {ctaText || "Yes, Add to My Order"}
+                      </s-button>
+                      <s-button variant="secondary">No Thanks</s-button>
+                    </s-stack>
+                  </s-box>
                 </s-stack>
               </s-box>
             </s-stack>
