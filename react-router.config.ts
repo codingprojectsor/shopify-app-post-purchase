@@ -7,5 +7,7 @@ export default {
     "*.devtunnels.ms",
     "*.devtunnels.ms:3000",
     "localhost:3000",
+    "storedrop.co",
+    "www.storedrop.co",
   ],
 } satisfies Config;
