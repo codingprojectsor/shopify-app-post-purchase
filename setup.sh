@@ -3,20 +3,20 @@ set -euo pipefail
 
 APP_DIR="/var/www/shopify-app-post-purchase"
 APP_PORT=3000
-DB_NAME="post_purchase_app"
-DB_USER="postpurchase"
-DB_PASS="PostPurchase@2026"
-NODE_VERSION="20"
+DB_NAME="upsellhive"
+DB_USER="upsellhive"
+DB_PASS="UpsellHive@2026"
 
 echo "=== Updating system ==="
 apt-get update -qq
 
-echo "=== Installing Node.js $NODE_VERSION ==="
-curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash -
+echo "=== Installing Node.js (latest LTS) ==="
+curl -fsSL https://deb.nodesource.com/setup_lts.x | bash -
 apt-get install -y -qq nodejs
+npm install -g npm@latest
 echo "Node: $(node -v) | npm: $(npm -v)"
 
-echo "=== Installing PostgreSQL ==="
+echo "=== Installing PostgreSQL (latest) ==="
 apt-get install -y -qq postgresql postgresql-contrib
 systemctl enable postgresql
 systemctl start postgresql
@@ -33,7 +33,7 @@ echo "=== Installing Nginx ==="
 apt-get install -y -qq nginx
 systemctl enable nginx
 
-cat > /etc/nginx/sites-available/post-purchase-app <<NGINX
+cat > /etc/nginx/sites-available/upsellhive <<NGINX
 server {
     listen 80;
     server_name _;
@@ -52,7 +52,7 @@ server {
 }
 NGINX
 
-ln -sf /etc/nginx/sites-available/post-purchase-app /etc/nginx/sites-enabled/post-purchase-app
+ln -sf /etc/nginx/sites-available/upsellhive /etc/nginx/sites-enabled/upsellhive
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl restart nginx
 echo "Nginx configured (port 80 -> ${APP_PORT})"
@@ -80,12 +80,12 @@ echo "=== Building app ==="
 npm run build
 
 echo "=== Starting app with PM2 ==="
-pm2 delete post-purchase-app 2>/dev/null || true
-PORT=${APP_PORT} pm2 start npm --name "post-purchase-app" -- run start
+pm2 delete upsellhive 2>/dev/null || true
+PORT=${APP_PORT} pm2 start npm --name "upsellhive" -- run start
 pm2 save
 pm2 startup systemd -u root --hp /root 2>/dev/null || true
 
 echo ""
 echo "=== Setup complete! ==="
 echo "App: http://$(hostname -I | awk '{print $1}')"
-echo "PM2: pm2 status / pm2 logs post-purchase-app"
+echo "PM2: pm2 status / pm2 logs upsellhive"
