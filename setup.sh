@@ -36,7 +36,7 @@ systemctl enable nginx
 cat > /etc/nginx/sites-available/upsellhive <<NGINX
 server {
     listen 80;
-    server_name _;
+    server_name Storedrop.co www.Storedrop.co;
     client_max_body_size 10M;
     location / {
         proxy_pass http://127.0.0.1:${APP_PORT};
@@ -56,6 +56,11 @@ ln -sf /etc/nginx/sites-available/upsellhive /etc/nginx/sites-enabled/upsellhive
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl restart nginx
 echo "Nginx configured (port 80 -> ${APP_PORT})"
+
+echo "=== Setting up SSL with Certbot ==="
+apt-get install -y -qq certbot python3-certbot-nginx
+certbot --nginx -d Storedrop.co -d www.Storedrop.co --non-interactive --agree-tos --redirect -m admin@Storedrop.co
+echo "SSL configured for Storedrop.co"
 
 echo "=== Installing PM2 ==="
 npm install -g pm2
@@ -81,11 +86,11 @@ npm run build
 
 echo "=== Starting app with PM2 ==="
 pm2 delete upsellhive 2>/dev/null || true
-PORT=${APP_PORT} pm2 start npm --name "upsellhive" -- run start
+pm2 start "export \$(cat ${APP_DIR}/.env | xargs) && PORT=${APP_PORT} npx react-router-serve ./build/server/index.js" --name "upsellhive"
 pm2 save
 pm2 startup systemd -u root --hp /root 2>/dev/null || true
 
 echo ""
 echo "=== Setup complete! ==="
-echo "App: http://$(hostname -I | awk '{print $1}')"
+echo "App: https://Storedrop.co"
 echo "PM2: pm2 status / pm2 logs upsellhive"
