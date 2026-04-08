@@ -1,5 +1,5 @@
 {
-  "name": "post-purchase-app",
+  "name": "upsellhive",
   "private": true,
   "scripts": {
     "build": "react-router build",

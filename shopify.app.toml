@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "e6f6501733cabb6b125158d2572505f3"
-name = "post-purchase-app"
+client_id = "d80522b1afd2c88a58b4cd3c12bc715b"
+name = "UpsellHive"
 application_url = "https://storedrop.co"
 embedded = true
 

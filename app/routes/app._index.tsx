@@ -431,7 +431,7 @@ export default function OffersIndex() {
   // Empty state — no offers at all (not filtered)
   if (offers.length === 0 && !hasActiveFilters && stats.totalOffers === 0) {
     return (
-      <s-page heading="Post-Purchase Upsells">
+      <s-page heading="UpsellHive — Offers">
         <s-button
           variant="primary" slot="primary-action"
           onClick={() => navigate("/app/offers/new")}
@@ -473,7 +473,7 @@ export default function OffersIndex() {
   const deleteOffer = offers.find((o) => o.id === deleteId);
 
   return (
-    <s-page heading="Post-Purchase Upsells">
+    <s-page heading="UpsellHive — Offers">
       <s-button
         variant="primary" slot="primary-action"
         onClick={() => canCreateOffer ? navigate("/app/offers/new") : navigate("/app/pricing")}

@@ -23,7 +23,7 @@ export default function App() {
         <div className={styles.logo}>U</div>
         <h1 className={styles.heading}>
           Boost Revenue with{" "}
-          <span className={styles.highlight}>Post-Purchase Upsells</span>
+          <span className={styles.highlight}>UpsellHive</span>
         </h1>
         <p className={styles.tagline}>
           UpsellHive shows targeted product offers on the thank-you page after checkout.
@@ -103,7 +103,7 @@ export default function App() {
 
       {/* Footer */}
       <div className={styles.footer}>
-        UpsellHive &mdash; Post-Purchase Upsell App for Shopify
+        UpsellHive &mdash; Boost Revenue with Post-Purchase Upsells
       </div>
     </div>
   );
