@@ -6,8 +6,8 @@
 api_version = "2026-01"
 
 [[extensions]]
-name = "after-purchase-ui"
-handle = "after-purchase-ui"
+name = "UpsellHive"
+handle = "upsellhive"
 type = "ui_extension"
 uid = "0dec559d-6edf-c30b-eee2-7a26a7807518d04315cf"
 
