@@ -981,7 +981,7 @@ export default function EditOffer() {
       </s-grid>
 
       {/* Delete Confirmation Modal */}
-      <s-modal accessibilityLabel="Dialog"
+      <s-modal accessibilityLabel="Delete offer confirmation"
         id="delete-offer-modal"
         ref={deleteModalRef}
         heading="Delete this offer?"

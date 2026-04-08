@@ -537,7 +537,8 @@ export default function OffersIndex() {
             <s-grid gridTemplateColumns="2fr 1fr 1fr 1fr" gap="base">
               <s-grid-item>
                 <s-text-field
-                  label="Search"
+                  label="Search offers"
+                  labelAccessibilityVisibility="exclusive"
                   placeholder="Search offers..."
                   value={searchInput}
                   onInput={(e: any) => handleSearchChange(e.target.value)}
@@ -699,7 +700,7 @@ export default function OffersIndex() {
       )}
 
       {/* Delete Confirmation Modal */}
-      <s-modal accessibilityLabel="Dialog"
+      <s-modal accessibilityLabel="Delete offer confirmation"
         id="delete-modal"
         ref={deleteModalRef}
         heading="Delete offer?"

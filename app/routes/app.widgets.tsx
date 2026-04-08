@@ -532,7 +532,7 @@ export default function WidgetsPage() {
       </s-section>
 
       {/* Add Question Modal */}
-      <s-modal accessibilityLabel="Dialog"
+      <s-modal accessibilityLabel="Widget settings"
         id="add-question-modal"
         ref={questionModalRef}
         heading="Add Survey Question"

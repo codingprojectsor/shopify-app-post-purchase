@@ -287,7 +287,7 @@ export default function ABTests() {
       )}
 
       {/* Create Test Modal */}
-      <s-modal accessibilityLabel="Dialog"
+      <s-modal accessibilityLabel="Create A/B test"
         id="create-ab-test"
         ref={createModalRef}
         heading="Create A/B Test"
@@ -366,7 +366,7 @@ export default function ABTests() {
       </s-modal>
 
       {/* Delete Confirmation Modal */}
-      <s-modal accessibilityLabel="Dialog"
+      <s-modal accessibilityLabel="Delete A/B test confirmation"
         id="delete-ab-test"
         ref={deleteModalRef}
         heading="Delete this test?"
