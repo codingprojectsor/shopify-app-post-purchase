@@ -4,15 +4,14 @@ declare global {
   var prismaGlobal: PrismaClient | undefined;
 }
 
-const isProduction = process.env.NODE_ENV === "production";
+const isDev = process.env.NODE_ENV !== "production";
 
-// In production, use DATABASE_URL_PRODUCTION if set, otherwise fall back to DATABASE_URL
-// Prisma reads DATABASE_URL by default, so we override it here for production
-if (isProduction && process.env.DATABASE_URL_PRODUCTION) {
-  process.env.DATABASE_URL = process.env.DATABASE_URL_PRODUCTION;
+// In dev, override DATABASE_URL with dev database
+if (isDev && process.env.DATABASE_URL_DEV) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL_DEV;
 }
 
-if (!isProduction) {
+if (isDev) {
   if (!global.prismaGlobal) {
     global.prismaGlobal = new PrismaClient();
   }
