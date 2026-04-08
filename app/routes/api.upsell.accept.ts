@@ -3,6 +3,9 @@ import { verifyExtensionToken } from "../utils/verify-extension-token.server";
 import { handleCors, corsJson, corsError } from "../utils/cors.server";
 import { unauthenticated } from "../shopify.server";
 import db from "../db.server";
+import { logger } from "../utils/logger.server";
+
+const log = logger.for("api.upsell.accept");
 
 export const loader = () => new Response(null, {
   status: 204,
@@ -116,7 +119,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const addData = await addVariantResponse.json();
     const addErrors = addData.data?.orderEditAddVariant?.userErrors;
     if (addErrors?.length) {
-      console.error("orderEditAddVariant errors:", addErrors);
+      log.error("orderEditAddVariant errors", addErrors);
       return corsJson({ error: addErrors[0].message }, { status: 422 });
     }
 
@@ -131,16 +134,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Step 3: Apply discount if configured
     if (offer.discountValue > 0 && calculatedLineItemId) {
+      const discountDesc =
+        offer.discountType === "percentage"
+          ? `${offer.discountValue}% off — ${offer.title}`
+          : `$${offer.discountValue} off — ${offer.title}`;
+
       const discountInput =
         offer.discountType === "percentage"
-          ? {
-              percentValue: offer.discountValue,
-              description: `${offer.discountValue}% upsell discount`,
-            }
-          : {
-              fixedValue: offer.discountValue,
-              description: `$${offer.discountValue} upsell discount`,
-            };
+          ? { percentValue: offer.discountValue, description: discountDesc }
+          : { fixedValue: offer.discountValue, description: discountDesc };
 
       try {
         const discountResponse = await admin.graphql(
@@ -172,10 +174,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const discountErrors =
           discountData.data?.orderEditAddLineItemDiscount?.userErrors;
         if (discountErrors?.length) {
-          console.error("Discount errors (item still added):", discountErrors);
+          log.warn("Discount errors (item still added)", discountErrors);
         }
       } catch (discountErr) {
-        console.error("Discount application failed (item still added):", discountErr);
+        log.warn("Discount application failed (item still added)", discountErr);
       }
     }
 
@@ -194,11 +196,55 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const commitData = await commitResponse.json();
     const commitErrors = commitData.data?.orderEditCommit?.userErrors;
     if (commitErrors?.length) {
-      console.error("orderEditCommit errors:", commitErrors);
+      log.error("orderEditCommit errors", commitErrors);
       return corsJson(
         { error: commitErrors[0].message },
         { status: 422 },
       );
+    }
+
+    // Step 5: Tag the order with upsell info
+    const committedOrderId = commitData.data?.orderEditCommit?.order?.id || orderGid;
+    try {
+      // Add tags: "upsell", offer title, discount info
+      const tags = [
+        "upsell",
+        `upsell:${offer.title}`,
+        offer.discountValue > 0
+          ? `upsell-discount:${offer.discountType === "percentage" ? offer.discountValue + "%" : "$" + offer.discountValue}`
+          : null,
+      ].filter(Boolean);
+
+      await admin.graphql(
+        `#graphql
+        mutation addOrderTags($id: ID!, $tags: [String!]!) {
+          tagsAdd(id: $id, tags: $tags) {
+            userErrors { field message }
+          }
+        }`,
+        { variables: { id: committedOrderId, tags } },
+      );
+
+      // Also add a note attribute via order update
+      await admin.graphql(
+        `#graphql
+        mutation addOrderNote($input: OrderInput!) {
+          orderUpdate(input: $input) {
+            userErrors { field message }
+          }
+        }`,
+        {
+          variables: {
+            input: {
+              id: committedOrderId,
+              note: `UpsellHive: "${offer.title}" — ${offer.productTitle}${offer.discountValue > 0 ? ` (${offer.discountType === "percentage" ? offer.discountValue + "% off" : "$" + offer.discountValue + " off"})` : ""}`,
+            },
+          },
+        },
+      );
+    } catch (tagErr) {
+      // Non-critical — don't fail the accept if tagging fails
+      log.warn("Order tagging failed (non-critical)", tagErr);
     }
 
     // Calculate revenue for analytics
@@ -223,7 +269,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     return corsJson({ success: true });
   } catch (err) {
-    console.error("Order edit failed:", err instanceof Error ? err.message : err);
+    log.error("Order edit failed", { error: err instanceof Error ? err.message : err, shop, offerId, orderId });
     const errMsg = err instanceof Error ? err.message : String(err);
     return corsJson(
       { error: `Order edit failed: ${errMsg}` },

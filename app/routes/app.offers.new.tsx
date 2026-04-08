@@ -1,6 +1,8 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { useNavigate, useFetcher, useLoaderData } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
+import { useProductPicker } from "../hooks/useProductPicker";
+import { useToast } from "../hooks/useToast";
+import { usePlanLimits } from "../hooks/usePlanLimits";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -32,6 +34,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { admin, session } = await authenticate.admin(request);
+
+  // Enforce plan offer limit
+  const { getActivePlanLimits } = await import("../utils/billing.server");
+  const planLimits = await getActivePlanLimits(session.shop);
+  if (planLimits.maxOffers !== -1) {
+    const activeCount = await db.upsellOffer.count({ where: { shop: session.shop, status: "active" } });
+    if (activeCount >= planLimits.maxOffers) {
+      return { errors: { _form: `You've reached the limit of ${planLimits.maxOffers} active offers on your plan. Upgrade to create more.` } };
+    }
+  }
+
   const formData = await request.formData();
 
   const title = formData.get("title") as string;
@@ -45,9 +58,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const discountType = formData.get("discountType") as string;
   const discountValue =
     parseFloat(formData.get("discountValue") as string) || 0;
-  const timeLimitMinutes = formData.get("timeLimitMinutes")
+  const rawTimerMinutes = formData.get("timeLimitMinutes")
     ? parseInt(formData.get("timeLimitMinutes") as string, 10)
     : null;
+  // Timer only available if plan allows scheduled/timed offers
+  const timeLimitMinutes = planLimits.scheduledOffers ? rawTimerMinutes : null;
   const status = (formData.get("status") as string) || "active";
   const testMode = formData.get("testMode") === "true";
   const priority = parseInt(formData.get("priority") as string, 10) || 0;
@@ -60,6 +75,14 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!title) errors.title = "Title is required";
   if (!productId) errors.productId = "Please select a product to upsell";
   if (!discountType) errors.discountType = "Discount type is required";
+
+  // Enforce plan feature limits
+  if (!planLimits.scheduledOffers && (scheduledStart || scheduledEnd)) {
+    errors.scheduledStart = "Scheduled offers require a paid plan";
+  }
+  if (!planLimits.funnelChaining && fallbackOfferId) {
+    errors.fallbackOfferId = "Funnel chaining requires a paid plan";
+  }
 
   // Validate discount value
   if (discountType === "percentage" && discountValue > 100) {
@@ -132,7 +155,7 @@ export default function NewOffer() {
   const { existingOffers } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
-  const shopify = useAppBridge();
+  const { limits } = usePlanLimits();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -150,6 +173,8 @@ export default function NewOffer() {
     [],
   );
 
+  const { pickProduct, pickProductForRule: pickProductRule } = useProductPicker();
+
   const [selectedProduct, setSelectedProduct] = useState<{
     productId: string;
     variantId: string;
@@ -162,40 +187,12 @@ export default function NewOffer() {
   const errors =
     fetcher.data && "errors" in fetcher.data ? fetcher.data.errors : null;
 
-  useEffect(() => {
-    if (
-      fetcher.state === "idle" &&
-      fetcher.data &&
-      "success" in fetcher.data &&
-      fetcher.data.success
-    ) {
-      shopify.toast.show("Offer created successfully!");
-      navigate("/app");
-    }
-  }, [fetcher.state, fetcher.data, shopify, navigate]);
+  useToast(fetcher, { success: "Offer created successfully!" }, () => navigate("/app"));
 
   const handleProductPicker = useCallback(async () => {
-    try {
-      const selected = await shopify.resourcePicker({
-        type: "product",
-        multiple: false,
-        action: "select",
-      });
-      if (selected && selected.length > 0) {
-        const product = selected[0];
-        const variant = product.variants?.[0];
-        setSelectedProduct({
-          productId: product.id,
-          variantId: variant?.id || "",
-          productTitle: product.title,
-          productImage: product.images?.[0]?.originalSrc || "",
-          productPrice: variant?.price || "0.00",
-        });
-      }
-    } catch (err) {
-      console.error("Product picker error:", err);
-    }
-  }, [shopify]);
+    const result = await pickProduct();
+    if (result) setSelectedProduct(result);
+  }, [pickProduct]);
 
   const addRule = () => {
     setTargetingRules([
@@ -220,27 +217,14 @@ export default function NewOffer() {
 
   const pickProductForRule = useCallback(
     async (index: number) => {
-      try {
-        const selected = await shopify.resourcePicker({
-          type: "product",
-          multiple: false,
-          action: "select",
-        });
-        if (selected && selected.length > 0) {
-          const product = selected[0];
-          const updated = [...targetingRules];
-          updated[index] = {
-            ...updated[index],
-            value: product.id,
-            productTitle: product.title,
-          };
-          setTargetingRules(updated);
-        }
-      } catch (err) {
-        console.error("Product picker error:", err);
+      const result = await pickProductRule();
+      if (result) {
+        const updated = [...targetingRules];
+        updated[index] = { ...updated[index], value: result.id, productTitle: result.title };
+        setTargetingRules(updated);
       }
     },
-    [shopify, targetingRules],
+    [pickProductRule, targetingRules],
   );
 
   const handleSubmit = () => {
@@ -592,8 +576,8 @@ export default function NewOffer() {
               </s-stack>
             </s-section>
 
-            {/* 5. Funnel (Fallback Offer) */}
-            {existingOffers.length > 0 && (
+            {/* 5. Funnel (Fallback Offer) — only if plan allows */}
+            {limits.funnelChaining && existingOffers.length > 0 && (
               <s-section heading="Funnel" padding="base">
                 <s-stack gap="base">
                   <s-paragraph color="subdued">
@@ -629,13 +613,18 @@ export default function NewOffer() {
                     </s-stack>
                     <s-grid gridTemplateColumns="1fr 1fr" gap="base">
                       <s-grid-item>
-                        <s-text-field
-                          label="Time limit (minutes)"
-                          value={timeLimitMinutes}
-                          onChange={(e: any) =>
-                            setTimeLimitMinutes(e.target.value)
-                          }
-                        />
+                        {limits.scheduledOffers ? (
+                          <s-text-field
+                            label="Countdown timer (minutes)"
+                            value={timeLimitMinutes}
+                            onChange={(e: any) => setTimeLimitMinutes(e.target.value)}
+                          />
+                        ) : (
+                          <s-stack gap="small-200">
+                            <s-text color="subdued">Countdown timer</s-text>
+                            <s-badge tone="info">Pro plan</s-badge>
+                          </s-stack>
+                        )}
                       </s-grid-item>
                       <s-grid-item>
                         <s-text-field
@@ -650,36 +639,35 @@ export default function NewOffer() {
                       offers are shown first when multiple match.
                     </s-text>
 
-                    <s-divider />
-
-                    <s-stack direction="inline" gap="small-200" alignItems="center">
-                      <s-icon type="calendar" color="subdued" size="small" />
-                      <s-text type="strong">Schedule</s-text>
-                    </s-stack>
-                    <s-grid gridTemplateColumns="1fr 1fr" gap="base">
-                      <s-grid-item>
-                        <s-date-field
-                          label="Start date (optional)"
-                          value={scheduledStart}
-                          onChange={(e: any) =>
-                            setScheduledStart(e.target.value)
-                          }
-                        />
-                      </s-grid-item>
-                      <s-grid-item>
-                        <s-date-field
-                          label="End date (optional)"
-                          value={scheduledEnd}
-                          onChange={(e: any) =>
-                            setScheduledEnd(e.target.value)
-                          }
-                        />
-                      </s-grid-item>
-                    </s-grid>
-                    <s-text color="subdued">
-                      Set dates to auto-enable/disable this offer. Leave empty
-                      for always active.
-                    </s-text>
+                    {/* Schedule — only if plan allows */}
+                    {limits.scheduledOffers && (
+                      <>
+                        <s-divider />
+                        <s-stack direction="inline" gap="small-200" alignItems="center">
+                          <s-icon type="calendar" color="subdued" size="small" />
+                          <s-text type="strong">Schedule</s-text>
+                        </s-stack>
+                        <s-grid gridTemplateColumns="1fr 1fr" gap="base">
+                          <s-grid-item>
+                            <s-date-field
+                              label="Start date (optional)"
+                              value={scheduledStart}
+                              onChange={(e: any) => setScheduledStart(e.target.value)}
+                            />
+                          </s-grid-item>
+                          <s-grid-item>
+                            <s-date-field
+                              label="End date (optional)"
+                              value={scheduledEnd}
+                              onChange={(e: any) => setScheduledEnd(e.target.value)}
+                            />
+                          </s-grid-item>
+                        </s-grid>
+                        <s-text color="subdued">
+                          Set dates to auto-enable/disable this offer. Leave empty for always active.
+                        </s-text>
+                      </>
+                    )}
                   </s-stack>
                 </s-box>
 

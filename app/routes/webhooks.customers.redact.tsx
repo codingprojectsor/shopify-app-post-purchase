@@ -1,11 +1,12 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import type { ActionFunctionArgs } from "react-router";
+import { logger } from "../utils/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, topic, payload } = await authenticate.webhook(request);
 
-  console.log(`Received ${topic} webhook for ${shop}`);
+  logger.for("webhook.customers.redact").info(`Received ${topic} webhook for ${shop}`);
 
   // Delete all customer-related data when Shopify requests redaction.
   const orders = (payload as any)?.orders_to_redact || [];
@@ -22,7 +23,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       where: { shop, orderId: { in: orderIds } },
     });
 
-    console.log(
+    logger.for("webhook.customers.redact").info(
       `Redacted customer data for ${shop}: ${orderIds.length} orders`,
     );
   }

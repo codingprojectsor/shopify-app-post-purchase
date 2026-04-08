@@ -5,6 +5,12 @@
    internal component styles via Shadow DOM.
    ============================================ */
 
+/* Reset default spacing */
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
 /* Tables: horizontal scroll on small screens */
 s-table {
   display: block;

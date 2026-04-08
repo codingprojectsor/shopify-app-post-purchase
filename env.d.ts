@@ -5,8 +5,10 @@ declare namespace NodeJS {
     SHOPIFY_API_KEY: string;
     SHOPIFY_API_SECRET: string;
     SHOPIFY_APP_URL: string;
+    SHOPIFY_APP_URL_PRODUCTION?: string;
     SCOPES: string;
-    ADMIN_SECRET?: string;
+    SESSION_SECRET?: string;
+    DATABASE_URL_PRODUCTION?: string;
   }
 }
 

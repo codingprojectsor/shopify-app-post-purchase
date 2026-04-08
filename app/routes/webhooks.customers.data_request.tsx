@@ -1,11 +1,12 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import type { ActionFunctionArgs } from "react-router";
+import { logger } from "../utils/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, topic, payload } = await authenticate.webhook(request);
 
-  console.log(`Received ${topic} webhook for ${shop}`);
+  logger.for("webhook.customers.data_request").info(`Received ${topic} webhook for ${shop}`);
 
   // Shopify requires a response to customer data requests.
   // Return all customer-related data stored by the app.
@@ -26,7 +27,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     select: { id: true, questionId: true, answer: true, createdAt: true },
   });
 
-  console.log(
+  logger.for("webhook.customers.data_request").info(
     `Customer data request for ${shop}: ${analyticsEvents.length} events, ${surveyResponses.length} survey responses`,
   );
 

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useLoaderData, useFetcher, useNavigate } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { usePlanLimits } from "../hooks/usePlanLimits";
+import { UpgradeBanner } from "../components/UpgradeBanner";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -172,6 +174,17 @@ export default function ABTests() {
   const { abTests, availableOffers } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const shopify = useAppBridge();
+  const { limits, currentPlan } = usePlanLimits();
+
+  if (!limits.abTesting) {
+    return (
+      <s-page heading="A/B Tests">
+        <s-section>
+          <UpgradeBanner feature="A/B Testing" currentPlan={currentPlan} />
+        </s-section>
+      </s-page>
+    );
+  }
   const createModalRef = useRef<any>(null);
   const deleteModalRef = useRef<any>(null);
   const [deleteTestId, setDeleteTestId] = useState<string | null>(null);
@@ -263,7 +276,6 @@ export default function ABTests() {
               <ABTestCard
                 key={test.id}
                 test={test}
-                fetcher={fetcher}
                 onDelete={() => {
                   setDeleteTestId(test.id);
                   deleteModalRef.current?.showOverlay();
@@ -392,13 +404,12 @@ export default function ABTests() {
 
 function ABTestCard({
   test,
-  fetcher,
   onDelete,
 }: {
   test: ABTestSummary;
-  fetcher: ReturnType<typeof useFetcher>;
   onDelete: () => void;
 }) {
+  const fetcher = useFetcher();
   const statusTone =
     test.status === "running"
       ? "warning"

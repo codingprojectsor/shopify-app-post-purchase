@@ -1,11 +1,12 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import type { ActionFunctionArgs } from "react-router";
+import { logger } from "../utils/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { shop, topic } = await authenticate.webhook(request);
 
-  console.log(`Received ${topic} webhook for ${shop}`);
+  logger.for("webhook.shop.redact").info(`Received ${topic} webhook for ${shop}`);
 
   // Shop has been uninstalled for 48+ hours — delete ALL shop data.
   await db.surveyResponse.deleteMany({ where: { shop } });
@@ -20,7 +21,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   await db.brandingConfig.deleteMany({ where: { shop } });
   await db.session.deleteMany({ where: { shop } });
 
-  console.log(`All data redacted for shop ${shop}`);
+  logger.for("webhook.shop.redact").info(`All data redacted for shop ${shop}`);
 
   return new Response();
 };

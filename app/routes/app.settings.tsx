@@ -168,6 +168,7 @@ export default function Settings() {
             <s-stack direction="inline" gap="base">
               <s-button
                 icon="enabled"
+                loading={fetcher.state !== "idle" || undefined}
                 onClick={() =>
                   fetcher.submit(
                     { intent: "enable_all" },
@@ -180,6 +181,7 @@ export default function Settings() {
               <s-button
                 variant="secondary"
                 icon="disabled"
+                loading={fetcher.state !== "idle" || undefined}
                 onClick={() =>
                   fetcher.submit(
                     { intent: "disable_all" },

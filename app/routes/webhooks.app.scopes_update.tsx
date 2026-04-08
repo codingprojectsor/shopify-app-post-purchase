@@ -1,11 +1,12 @@
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import type { ActionFunctionArgs } from "react-router";
+import { logger } from "../utils/logger.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const { payload, session, topic, shop } = await authenticate.webhook(request);
 
-  console.log(`Received ${topic} webhook for ${shop}`);
+  logger.for("webhook.app.scopes_update").info(`Received ${topic} webhook for ${shop}`);
   const current = payload.current;
 
   if (session) {

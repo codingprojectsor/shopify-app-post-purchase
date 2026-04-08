@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { verifyExtensionToken } from "../utils/verify-extension-token.server";
 import { handleCors, corsJson, corsError } from "../utils/cors.server";
 import { checkRateLimit } from "../utils/rate-limit.server";
+import { getActivePlanLimits } from "../utils/billing.server";
 import db from "../db.server";
 
 export const loader = () => new Response(null, {
@@ -47,6 +48,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const msg = err instanceof Response ? await err.text() : "Auth failed";
     return corsError(msg, status);
   }
+
+  // Get plan limits for this shop
+  const planLimits = await getActivePlanLimits(shop);
 
   // Rate limit: 30 requests per minute per shop
   if (!checkRateLimit(`offer:${shop}`, 30)) {
@@ -94,7 +98,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
         if (!alreadyPurchased) {
           return corsJson({
-            offer: formatOffer(fallback, funnelStep + 1),
+            offer: formatOffer(fallback, funnelStep + 1, planLimits),
           });
         }
       }
@@ -156,20 +160,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       (o) => o.targetingRules.length === 0,
     );
     if (fallbackOffer) {
-      return corsJson({ offer: formatOffer(fallbackOffer, 1) });
+      return corsJson({ offer: formatOffer(fallbackOffer, 1, planLimits) });
     }
     return corsJson({ offer: null });
   }
 
   return corsJson({
-    offer: formatOffer(matchedOffer, 1),
+    offer: formatOffer(matchedOffer, 1, planLimits),
   });
   } catch (err) {
     return corsError(String(err), 500);
   }
 };
 
-function formatOffer(offer: any, funnelStep: number) {
+function formatOffer(offer: any, funnelStep: number, planLimits?: any) {
   const originalPrice = parseFloat(offer.productPrice);
   const discountedPrice =
     offer.discountType === "percentage"
@@ -189,8 +193,10 @@ function formatOffer(offer: any, funnelStep: number) {
     discountType: offer.discountType,
     discountValue: offer.discountValue,
     discountedPrice: Math.max(0, discountedPrice).toFixed(2),
-    timeLimitMinutes: offer.timeLimitMinutes,
-    hasFallback: !!offer.fallbackOfferId,
+    // Timer only if plan allows scheduled/timed offers
+    timeLimitMinutes: planLimits?.scheduledOffers ? offer.timeLimitMinutes : null,
+    // Funnel only if plan allows
+    hasFallback: planLimits?.funnelChaining ? !!offer.fallbackOfferId : false,
     funnelStep,
   };
 }

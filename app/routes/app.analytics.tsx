@@ -1,5 +1,7 @@
 import { useLoaderData, useNavigate } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { usePlanLimits } from "../hooks/usePlanLimits";
+import { UpgradeBanner } from "../components/UpgradeBanner";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
 import type { HeadersArgs, LoaderFunctionArgs } from "react-router";
@@ -129,6 +131,17 @@ export default function Analytics() {
   const { offerAnalytics, dailyData, totals, page, totalPages, totalOffers, days } =
     useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const { limits, currentPlan } = usePlanLimits();
+
+  if (!limits.analytics) {
+    return (
+      <s-page heading="Analytics">
+        <s-section>
+          <UpgradeBanner feature="Advanced Analytics" currentPlan={currentPlan} />
+        </s-section>
+      </s-page>
+    );
+  }
 
   const changeDays = (d: number) => navigate(`/app/analytics?days=${d}`);
 
@@ -183,22 +196,26 @@ export default function Analytics() {
             1 year
           </s-button>
 
-          <s-button
-            variant="tertiary"
-            icon="export"
-            href={`/api/analytics/export?type=offers`}
-            target="_blank"
-          >
-            Export Offers CSV
-          </s-button>
-          <s-button
-            variant="tertiary"
-            icon="export"
-            href={`/api/analytics/export?type=daily&days=${days}`}
-            target="_blank"
-          >
-            Export Daily CSV
-          </s-button>
+          {limits.csvExport && (
+            <>
+              <s-button
+                variant="tertiary"
+                icon="export"
+                href={`/api/analytics/export?type=offers`}
+                target="_blank"
+              >
+                Export Offers CSV
+              </s-button>
+              <s-button
+                variant="tertiary"
+                icon="export"
+                href={`/api/analytics/export?type=daily&days=${days}`}
+                target="_blank"
+              >
+                Export Daily CSV
+              </s-button>
+            </>
+          )}
         </s-stack>
       </s-section>
 

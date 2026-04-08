@@ -150,6 +150,51 @@ model SurveyResponse {
   createdAt  DateTime       @default(now())
 }
 
+// Pricing Plans (managed from admin panel)
+model Plan {
+  id              String   @id @default(cuid())
+  name            String   // "Free", "Starter", "Growth", "Pro"
+  slug            String   @unique // "free", "starter", "growth", "pro"
+  price           Float    @default(0) // monthly USD, 0 = free
+  trialDays       Int      @default(3)
+  maxOffers       Int      @default(2) // -1 = unlimited
+  abTesting       Boolean  @default(false)
+  analytics       Boolean  @default(false)
+  customBranding  Boolean  @default(false)
+  prioritySupport Boolean  @default(false)
+  scheduledOffers Boolean  @default(false)
+  funnelChaining  Boolean  @default(false)
+  csvExport       Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0) // display order
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Subscription / Billing
+model Subscription {
+  id              String    @id @default(cuid())
+  shop            String    @unique
+  plan            String    @default("free") // "free" | "starter" | "growth" | "pro"
+  status          String    @default("active") // "active" | "cancelled" | "expired" | "pending"
+  shopifyChargeId String?   // Shopify's appSubscription GID
+  currency        String    @default("USD") // shop's currency code
+  trialStartsAt   DateTime?
+  trialEndsAt     DateTime?
+  currentPeriodEnd DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// Admin panel config
+model AdminConfig {
+  id           String   @id @default("admin_config")
+  password     String   @default("Admin@e07a595") // plain password (for admin to copy/share)
+  passwordHash String   // bcrypt hash used for login verification
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 // Branding settings per shop
 model BrandingConfig {
   id              String @id @default(cuid())

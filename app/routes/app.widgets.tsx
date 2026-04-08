@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useLoaderData, useFetcher } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
+import { usePlanLimits } from "../hooks/usePlanLimits";
+import { UpgradeBanner } from "../components/UpgradeBanner";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
 import db from "../db.server";
@@ -195,8 +197,20 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 export default function WidgetsPage() {
   const { widgets, branding, surveyQuestions, surveyResponseCount } =
     useLoaderData<typeof loader>();
-  const fetcher = useFetcher();
+  const fetcher = useFetcher(); // for settings save only
+  const widgetFetcher = useFetcher(); // for move/toggle (quick actions)
   const shopify = useAppBridge();
+  const { limits, currentPlan } = usePlanLimits();
+
+  if (!limits.customBranding) {
+    return (
+      <s-page heading="Widgets & Branding">
+        <s-section>
+          <UpgradeBanner feature="Custom Widgets & Branding" currentPlan={currentPlan} />
+        </s-section>
+      </s-page>
+    );
+  }
   const questionModalRef = useRef<any>(null);
 
   // Branding state
@@ -289,10 +303,10 @@ export default function WidgetsPage() {
                     <s-button
                       variant="tertiary"
                       icon="caret-up"
-                      disabled={idx === 0 || fetcher.state !== "idle" || undefined}
+                      disabled={idx === 0 || widgetFetcher.state !== "idle" || undefined}
                       accessibilityLabel="Move up"
                       onClick={() =>
-                        fetcher.submit(
+                        widgetFetcher.submit(
                           { intent: "move_widget", widgetType: widget.widgetType, direction: "up" },
                           { method: "POST" },
                         )
@@ -301,10 +315,10 @@ export default function WidgetsPage() {
                     <s-button
                       variant="tertiary"
                       icon="caret-down"
-                      disabled={idx === widgetList.length - 1 || fetcher.state !== "idle" || undefined}
+                      disabled={idx === widgetList.length - 1 || widgetFetcher.state !== "idle" || undefined}
                       accessibilityLabel="Move down"
                       onClick={() =>
-                        fetcher.submit(
+                        widgetFetcher.submit(
                           { intent: "move_widget", widgetType: widget.widgetType, direction: "down" },
                           { method: "POST" },
                         )
@@ -319,9 +333,9 @@ export default function WidgetsPage() {
                     checked={widget.enabled}
                     label={widget.label}
                     labelAccessibilityVisibility="exclusive"
-                    disabled={fetcher.state !== "idle" || undefined}
+                    disabled={widgetFetcher.state !== "idle" || undefined}
                     onChange={() =>
-                      fetcher.submit(
+                      widgetFetcher.submit(
                         { intent: "toggle_widget", widgetType: widget.widgetType, enabled: String(!widget.enabled) },
                         { method: "POST" },
                       )
